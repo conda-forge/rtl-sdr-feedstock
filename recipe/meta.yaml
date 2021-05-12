@@ -20,7 +20,9 @@ requirements:
   build:
     - {{ compiler('c') }}
     - cmake
-    - {{ cdt('libudev-devel') }}  # [linux]
+    # libudev is on its own in CentOS 6, packaged with systemd in CentOS 7
+    - {{ cdt('libudev-devel') }}  # [linux and cdt_name=='cos6']
+    - {{ cdt('systemd-devel') }}  # [linux and cdt_name=='cos7']
     - make  # [not win]
     - ninja  # [win]
     - pkg-config
