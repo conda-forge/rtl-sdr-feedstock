@@ -3,16 +3,20 @@
 
 package:
   name: {{ name|lower }}
-  version: {{ version }}
+  version: {{ version }}.post20220126
 
 source:
   url: https://github.com/osmocom/{{ name }}/archive/{{ version }}.tar.gz
   sha256: ee10a76fe0c6601102367d4cdf5c26271e9442d0491aa8df27e5a9bf639cff7c
   patches:
-    - 0001-Fixed-issues-compiling-on-Windows-with-MSVC.patch
+    - 0001-Add-commits-since-0.6.0-through-2022-01-19.patch
+    - 0002-count-live-transfers-before-close.patch
+    - 0003-add-libusb-lib-directories-in-cmake-for-macos.patch
+    - 0004-call-interrupt_event_handler-in-cancel_async.patch
+    - 0005-Set-version-for-conda-forge.patch
 
 build:
-  number: 2
+  number: 0
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
 
@@ -20,14 +24,16 @@ requirements:
   build:
     - {{ compiler('c') }}
     - cmake
-    # libudev is on its own in CentOS 6, packaged with systemd in CentOS 7
+    # libudev CDT needed to link against libusb through uhd on linux CentOS 6
+    # libusb uses the conda-forge libudev package for CentOS 7
     - {{ cdt('libudev-devel') }}  # [linux and cdt_name=='cos6']
-    - {{ cdt('systemd-devel') }}  # [linux and cdt_name=='cos7']
     - make  # [not win]
     - ninja  # [win]
     - pkg-config
   host:
-    - libusb >=1
+    - libusb
+    # restrict to cos6-compatible libusb (and libudev)
+    - libusb-cos6  # [linux and cdt_name=='cos6']
     - pthreads-win32  # [win]
   run:
     - pthreads-win32  # [win]
@@ -38,8 +44,8 @@ test:
     - setlocal EnableDelayedExpansion  # [win]
 
     # verify that executables get installed
-    {% set cmds = ["rtl_adsb", "rtl_eeprom", "rtl_fm", "rtl_power", "rtl_sdr"] %}
-    {% set cmds = cmds + ["rtl_tcp", "rtl_test"] %}
+    {% set cmds = ["rtl_adsb", "rtl_biast", "rtl_eeprom", "rtl_fm", "rtl_power"] %}
+    {% set cmds = cmds + ["rtl_sdr", "rtl_tcp", "rtl_test"] %}
     {% for cmd in cmds %}
     - {{ cmd }} -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
     - {{ cmd }} -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
