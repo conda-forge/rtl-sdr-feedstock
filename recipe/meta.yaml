@@ -13,6 +13,7 @@ source:
     - 0002-count-live-transfers-before-close.patch
     - 0003-add-libusb-lib-directories-in-cmake-for-macos.patch
     - 0004-call-interrupt_event_handler-in-cancel_async.patch
+    - 0005-Set-version-for-conda-forge.patch
 
 build:
   number: 0
