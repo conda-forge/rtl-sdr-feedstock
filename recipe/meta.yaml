@@ -23,14 +23,16 @@ requirements:
   build:
     - {{ compiler('c') }}
     - cmake
-    # libudev is on its own in CentOS 6, packaged with systemd in CentOS 7
+    # libudev CDT needed to link against libusb through uhd on linux CentOS 6
+    # libusb uses the conda-forge libudev package for CentOS 7
     - {{ cdt('libudev-devel') }}  # [linux and cdt_name=='cos6']
-    - {{ cdt('systemd-devel') }}  # [linux and cdt_name=='cos7']
     - make  # [not win]
     - ninja  # [win]
     - pkg-config
   host:
-    - libusb >=1
+    - libusb
+    # restrict to cos6-compatible libusb (and libudev)
+    - libusb-cos6  # [linux and cdt_name=='cos6']
     - pthreads-win32  # [win]
   run:
     - pthreads-win32  # [win]
