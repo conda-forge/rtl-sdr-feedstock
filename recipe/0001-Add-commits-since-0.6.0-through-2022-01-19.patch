@@ -1,0 +1,2105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Volz <ryan.volz@gmail.com>
+Date: Sat, 12 Feb 2022 20:45:56 -0500
+Subject: [PATCH] Add commits since 0.6.0 through 2022/01/19
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+change version to 0.6git
+
+Signed-off-by: Steve Markgraf <steve@steve-m.de>
+
+lib: Add workaround for Linux usbfs mmap() bug
+
+The Linux Kernel has a bug on ARM/ARM64 systems where the USB CMA
+memory is incorrectly mapped to userspace, breaking zerocopy.
+
+When the Kernel allocates the memory, it clears it with memset().
+If the mapping worked correctly, we should have zeroed out buffers,
+if it doesn't, we get random Kernel memory. We now check for this,
+and fall back to buffers in userspace if that's the case.
+
+Signed-off-by: Steve Markgraf <steve@steve-m.de>
+
+contrib/jenkins.sh: run "make maintainer-clean"
+
+Related: OS#3047
+Signed-off-by: Oliver Smith <osmith@sysmocom.de>
+Signed-off-by: Steve Markgraf <steve@steve-m.de>
+
+lib: fix memory leak in rtlsdr_open()
+
+Thanks to Vincent Perrier for reporting the bug.
+
+lib: disable usbfs zero-copy support by default
+
+Although we added a detection mechanism for the presence of the Kernel
+bug earlier, reading from the incorrectly mapped memory might cause a
+bus error on some ARM systems.
+
+With the overall performance benefit being rather minimal for the
+data rates of rtl-sdr, disable zero-copy by default.
+
+rtl_eeprom: fix warnings
+
+Account for \0 string terminator when calling strncpy().
+
+Fixes the following GCC 9 warning:
+warning: ‘__builtin_strncpy’ specified
+bound 256 equals destination size
+
+Fix building librtlsdr on OpenBSD
+
+Gets rid of librt, which doesn't exist on OpenBSD. The version of
+librtlsdr in the OpenBSD ports tree is extremely old (~2013), so this
+should help some users.
+
+Tested against tag 0.6.0, but it should apply just fine to HEAD.
+
+lib: Add GPIO version of the bias tee configuration API
+
+rtl_biast allows for non-default GPIO pins to be used.
+Add an API call which allows for that.
+
+rtl_biast: Add rtl_biast
+
+This is an import of the rtl_biast command line tool from the
+rtlsdrblog github repository.  It's easier to include it here than
+try to package up the separate application because they both
+wish to install dynamic libraries.
+
+allow building librtlsdr as CMake subproject
+
+Replace CMAKE_SOURCE_DIR by PROJECT_SOURCE_DIR in main CMakeLists.txt
+to fix CMake errors when building librtlsdr as a subproject.
+
+Fixed issues compiling on Windows with MSVC, CMake and NMake (#61)
+
+When trying to build a simple program which uses librtlsdr
+as a subproject on Windows, CMake reported several problems
+which were solved by:
+- Added complete name of libusb in FindLibUSB module.
+- Replaced CMAKE_SOURCE_DIR to PROJECT_SOURCE_DIR in src/CMakeLists.txt.
+- Replaced header file <afxres.h> in src/rtlsdr.rc.in (only present when windows MFC is
+  installed) by <windows.h> which defines the same constants.
+
+set CMake policy CMP0075 if it exists
+
+Otherwise newer versions of CMake are throwing a warning.
+
+lib: enable better UHF reception (>862MHz) for FC0013
+
+Improve librtlsdr.pc file
+
+librtlsdr.pc should declare -lusb-1.0 in Libs.private section
+to exclude usb library from dynamic linking.
+References to libusb headers are not needed in Cflags, since these
+headers are not used by external rtlsdr API, but this is optional.
+https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=784912
+
+CMake: support for libusb on GNU/Hurd
+
+Debian builds on hurd-i386 with a variant of libusb.
+
+rtl_fm/rtl_power: Improve scanning range parsing
+
+Use udev uaccess rules
+
+rtl_tcp: Add IPv6 support
+
+I've prepared this patch in response to Debian bug #870804
+https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=870804
+
+It passes the text from the -a and -p options through
+getaddrinfo() and uses the first result that has a valid
+socket with a successful bind.
+
+While not a complete bind to all possible valid names, it
+does appear to address the use case of the bug submitter
+without completely changing the program flow.
+
+rtl_tcp: Initialize listensocket
+
+Older versions of GCC will complain that it can be used
+uninitialized - which is not the case, but it breaks our Jenkins
+build as we build with -Werror.
+
+Modernize CMake
+
+New minimum version is CMake 3.7.2.
+
+This patch has been rebased to incorporate changes that happened
+since the creation of the original patch.
+
+Original Author: A. Maitland Bottoms  <bottoms@debian.org>, 07 Sep 2018
+
+Update Debian packaging information
+
+Add missing rtlsdrConfig.cmake
+
+This file was missing in commit
+849f8efca42b659bf7e8fe17156ee0aa67b47233.
+
+Fix for CMake < 3.12.0
+
+As several current LTS distributions currently ship with CMake
+< 3.12.0, add a work-around for CMake Issue 16967.
+
+Otherwise we get:
+CMake Error at
+/usr/share/cmake-3.7/Modules/CheckCXXSourceCompiles.cmake:64 (try_compile):
+   Unknown extension ".cxx" for file
+
+     /tmp/rtl-sdr/build/CMakeFiles/CMakeTmp/src.cxx
+
+   try_compile() works only for enabled languages.  Currently these are:
+
+     C
+
+debian: fix source/format from quilt to native
+
+We certainly don't use quilt, as we build packages using
+git-buildpackage.
+
+This is what likely causes build failures on our osmocom nightly
+builds stating
+
+gbp:error: Non-native package 'rtl-sdr' has invalid version '0.5.4.32.3d7c'
+
+If the package now is 'native', the errors should be gone.
+
+tuner_r82xx: fix short-write in r82xx_read
+
+In r82xx_read, there is a 1-byte I2C write followed by the I2C read.  If
+this I2C write fails, r82xx_read correctly bails out but may return 0.
+Callers that check whether (rc < 0) will assume that the buffer was written
+when it has not been, e.g. in r82xx_set_tv_standard where
+
+	priv->fil_cal_code = data[4] & 0x0f;
+
+consumes a garbage value for data[4].
+
+This change resolves that issue by copying the error path from r82xx_write.
+
+Add rtl_biast as install target
+
+Thanks to https://github.com/erikarn for pointing this out.
+
+cmake: populate pkgconfig file with prefix
+
+Previously the prefix and related paths were not set.
+
+fix windows build
+
+We really should not have pkgconfig as a build requirement on windows.
+
+rtl_tcp: Extracted some constants out of printf strings
+
+The help output contained constants that should print values
+based on code constants and not be hardcoded into the print strings.
+
+rtl_tcp: put new DEFAULT_* constants in defines
+
+Fix failures with some GCC versions:
+  /usr/src/packages/BUILD/src/rtl_tcp.c:90:24: error: initializer element is not constant
+   static int llbuf_num = DEFAULT_MAX_NUM_BUFFERS;
+
+Fixes: 641c22 ("rtl_tcp: Extracted some constants out of printf strings")
+Change-Id: Ia9e18d4c22d957f561dcdaf2657bb6d201374375
+
+rtl_fm: add a new option to select 2nd direct sampling mode
+
+Fix minGW build
+
+MinGW-w64 ships all Windows SDK headers as lowercase, which prevents
+cross-compiling this code from Linux.
+
+lib: force wait state after cancel of usb transfer
+
+..and before handling usb events
+
+This avoids an occasional crash when closing the device on Windows.
+Also see https://github.com/libusb/libusb/issues/1043.
+
+lib: Stop applying workaround for libusb < 1.0.9
+
+Librtlsdr has a workaround for libusb versions that lack
+libusb_handle_events_timeout_completed, which was added in version 1.0.9
+(released 2012-04-02). The workaround is always applied unless the
+HAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED macro is set, but the cmake
+code that sets this macro was removed in
+849f8efca42b659bf7e8fe17156ee0aa67b47233. As a result, the workaround is
+now always applied. This results in an extra 1-second delay whenever a
+GNU Radio flowgraph containing an RTL-SDR block is stopped, which makes
+operations like switching between demodulators in Gqrx annoyingly slow.
+
+To solve this problem, I've simply removed the workaround, as it should
+no longer be needed.
+
+I wonder if perhaps the workaround recently applied in
+2659e2df31e592d74d6dd264a4f5ce242c6369c8 might stem from the same bug.
+---
+ CMakeLists.txt                  | 127 +++++++++++------
+ cmake/Modules/FindLibUSB.cmake  |  55 -------
+ cmake/Modules/FindThreads.cmake | 246 --------------------------------
+ cmake/rtlsdrConfig.cmake        |   8 ++
+ configure.ac                    |   6 +
+ contrib/jenkins.sh              |   1 +
+ debian/changelog                |   9 +-
+ debian/compat                   |   2 +-
+ debian/control                  |   5 +-
+ debian/librtlsdr-dev.acc        |  27 ++++
+ debian/librtlsdr-dev.install    |   1 +
+ debian/librtlsdr0.udev          |  87 ++++++-----
+ debian/rules                    |  10 +-
+ include/rtl-sdr.h               |  11 ++
+ librtlsdr.pc.in                 |   6 +-
+ rtl-sdr.rules                   |  84 +++++------
+ src/CMakeLists.txt              | 129 +++++++++--------
+ src/librtlsdr.c                 |  44 ++++--
+ src/rtl_biast.c                 | 101 +++++++++++++
+ src/rtl_eeprom.c                |   6 +-
+ src/rtl_fm.c                    |  28 +++-
+ src/rtl_power.c                 |   8 ++
+ src/rtl_tcp.c                   | 106 ++++++++++----
+ src/rtlsdr.rc.in                |   2 +-
+ src/tuner_fc0013.c              |   4 +-
+ src/tuner_r82xx.c               |  10 +-
+ 26 files changed, 569 insertions(+), 554 deletions(-)
+ delete mode 100644 cmake/Modules/FindLibUSB.cmake
+ delete mode 100644 cmake/Modules/FindThreads.cmake
+ create mode 100644 cmake/rtlsdrConfig.cmake
+ create mode 100644 debian/librtlsdr-dev.acc
+ create mode 100644 src/rtl_biast.c
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b5ddfaa..e2946ba 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,46 +1,49 @@
+-# Copyright 2012 OSMOCOM Project
++# Copyright 2012-2020 Osmocom Project
+ #
+ # This file is part of rtl-sdr
+ #
+-# GNU Radio is free software; you can redistribute it and/or modify
++# This program is free software: you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+-# the Free Software Foundation; either version 3, or (at your option)
+-# any later version.
++# the Free Software Foundation, either version 2 of the License, or
++# (at your option) any later version.
+ #
+-# GNU Radio is distributed in the hope that it will be useful,
++# This program is distributed in the hope that it will be useful,
+ # but WITHOUT ANY WARRANTY; without even the implied warranty of
+ # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ # GNU General Public License for more details.
+ #
+ # You should have received a copy of the GNU General Public License
+-# along with GNU Radio; see the file COPYING.  If not, write to
+-# the Free Software Foundation, Inc., 51 Franklin Street,
+-# Boston, MA 02110-1301, USA.
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ 
+ 
+ ########################################################################
+ # Project setup
+ ########################################################################
+-cmake_minimum_required(VERSION 2.6)
+-project(rtlsdr C)
++cmake_minimum_required(VERSION 3.7.2)
++
++# workaround for https://gitlab.kitware.com/cmake/cmake/issues/16967
++if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
++    project(rtlsdr)
++else()
++    project(rtlsdr C)
++endif()
+ 
+ #select the release build type by default to get optimization flags
+ if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
+    message(STATUS "Build type not specified: defaulting to release.")
+ endif(NOT CMAKE_BUILD_TYPE)
+-set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "")
+ 
+-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
++list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
+ 
+-if(NOT LIB_INSTALL_DIR)
+-   set(LIB_INSTALL_DIR lib)
+-endif()
++include(GNUInstallDirs)
++include(GenerateExportHeader)
++include(CMakePackageConfigHelpers)
+ 
+ # Set the version information here
+ set(VERSION_INFO_MAJOR_VERSION 0) # increment major on api compatibility changes
+ set(VERSION_INFO_MINOR_VERSION 6) # increment minor on feature-level changes
+-set(VERSION_INFO_PATCH_VERSION 0) # increment patch for bug fixes and docs
++set(VERSION_INFO_PATCH_VERSION git) # increment patch for bug fixes and docs
+ include(Version) # setup version info
+ 
+ ########################################################################
+@@ -63,40 +66,36 @@ endif()
+ ########################################################################
+ # Find build dependencies
+ ########################################################################
++find_package(Threads)
+ find_package(PkgConfig)
+-find_package(LibUSB)
+-if(WIN32 AND NOT MINGW)
+-    set(THREADS_USE_PTHREADS_WIN32 true)
++
++if(PKG_CONFIG_FOUND)
++    pkg_check_modules(LIBUSB libusb-1.0 IMPORTED_TARGET)
++else()
++    set(LIBUSB_LIBRARIES "" CACHE STRING "manual libusb path")
++    set(LIBUSB_INCLUDE_DIRS "" CACHE STRING "manual libusb includepath")
++endif()
++
++if(MSVC)
++    set(THREADS_PTHREADS_LIBRARY "" CACHE STRING "manual pthread-win32 path")
++    set(THREADS_PTHREADS_INCLUDE_DIR "" CACHE STRING "manual pthread-win32 includepath")
++else()
++    set(THREADS_PTHREADS_LIBRARY "" CACHE INTERNAL "manual pthread-win32 path")
++    set(THREADS_PTHREADS_INCLUDE_DIR "" CACHE INTERNAL "manual pthread-win32 includepath")
+ endif()
+-find_package(Threads)
+ 
+-if(NOT LIBUSB_FOUND)
++if(PKG_CONFIG_FOUND AND NOT LIBUSB_FOUND)
+     message(FATAL_ERROR "LibUSB 1.0 required to compile rtl-sdr")
+ endif()
+ if(NOT THREADS_FOUND)
+     message(FATAL_ERROR "pthreads(-win32) required to compile rtl-sdr")
+ endif()
+-########################################################################
+-# Setup the include and linker paths
+-########################################################################
+-include_directories(
+-    ${CMAKE_SOURCE_DIR}/include
+-    ${LIBUSB_INCLUDE_DIR}
+-    ${THREADS_PTHREADS_INCLUDE_DIR}
+-)
+-
+-#link_directories(
+-#    ...
+-#)
+-
+-# Set component parameters
+-#set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include CACHE INTERNAL "" FORCE)
+ 
+ ########################################################################
+ # Create uninstall target
+ ########################################################################
+ configure_file(
+-    ${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in
++    ${PROJECT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in
+     ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+ @ONLY)
+ 
+@@ -126,16 +125,32 @@ else (DETACH_KERNEL_DRIVER)
+     message (STATUS "Building with kernel driver detaching disabled, use -DDETACH_KERNEL_DRIVER=ON to enable")
+ endif (DETACH_KERNEL_DRIVER)
+ 
++option(ENABLE_ZEROCOPY "Enable usbfs zero-copy support" OFF)
++if (ENABLE_ZEROCOPY)
++    message (STATUS "Building with usbfs zero-copy support enabled")
++    add_definitions(-DENABLE_ZEROCOPY=1)
++else (ENABLE_ZEROCOPY)
++    message (STATUS "Building with usbfs zero-copy support disabled, use -DENABLE_ZEROCOPY=ON to enable")
++endif (ENABLE_ZEROCOPY)
++
++########################################################################
++# Install public header files
++########################################################################
++install(FILES
++    include/rtl-sdr.h
++    include/rtl-sdr_export.h
++    DESTINATION include
++)
++
+ ########################################################################
+ # Add subdirectories
+ ########################################################################
+-add_subdirectory(include)
+ add_subdirectory(src)
+ 
+ ########################################################################
+ # Create Pkg Config File
+ ########################################################################
+-FOREACH(inc ${LIBUSB_INCLUDE_DIR})
++FOREACH(inc ${LIBUSB_INCLUDEDIR})
+     LIST(APPEND RTLSDR_PC_CFLAGS "-I${inc}")
+ ENDFOREACH(inc)
+ 
+@@ -153,10 +168,10 @@ IF(CMAKE_CROSSCOMPILING)
+     UNSET(RTLSDR_PC_LIBS)
+ ENDIF(CMAKE_CROSSCOMPILING)
+ 
+-set(prefix ${CMAKE_INSTALL_PREFIX})
++set(prefix "${CMAKE_INSTALL_PREFIX}")
+ set(exec_prefix \${prefix})
+-set(libdir \${exec_prefix}/${LIB_INSTALL_DIR})
+ set(includedir \${prefix}/include)
++set(libdir \${exec_prefix}/lib)
+ 
+ CONFIGURE_FILE(
+     ${CMAKE_CURRENT_SOURCE_DIR}/librtlsdr.pc.in
+@@ -165,9 +180,37 @@ CONFIGURE_FILE(
+ 
+ INSTALL(
+     FILES ${CMAKE_CURRENT_BINARY_DIR}/librtlsdr.pc
+-    DESTINATION ${LIB_INSTALL_DIR}/pkgconfig
++    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+ )
+ 
++########################################################################
++# Create CMake Config File
++########################################################################
++write_basic_package_version_file(
++  "${CMAKE_CURRENT_BINARY_DIR}/rtlsdr/rtlsdrConfigVersion.cmake"
++  VERSION ${VERSION}
++  COMPATIBILITY AnyNewerVersion
++  )
++
++configure_file(cmake/rtlsdrConfig.cmake
++  "${CMAKE_CURRENT_BINARY_DIR}/rtlsdr/rtlsdrConfig.cmake"
++  COPYONLY
++  )
++
++set(ConfigPackageLocation lib/cmake/rtlsdr)
++install(EXPORT RTLSDR-export
++  FILE rtlsdrTargets.cmake
++  NAMESPACE rtlsdr::
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtlsdr/
++  )
++install(
++  FILES
++  cmake/rtlsdrConfig.cmake
++  "${CMAKE_CURRENT_BINARY_DIR}/rtlsdr/rtlsdrConfigVersion.cmake"
++  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rtlsdr/
++  COMPONENT Devel
++  )
++
+ ########################################################################
+ # Print Summary
+ ########################################################################
+diff --git a/cmake/Modules/FindLibUSB.cmake b/cmake/Modules/FindLibUSB.cmake
+deleted file mode 100644
+index c2c3f63..0000000
+--- a/cmake/Modules/FindLibUSB.cmake
++++ /dev/null
+@@ -1,55 +0,0 @@
+-if(NOT LIBUSB_FOUND)
+-  pkg_check_modules (LIBUSB_PKG libusb-1.0)
+-  find_path(LIBUSB_INCLUDE_DIR NAMES libusb.h
+-    PATHS
+-    ${LIBUSB_PKG_INCLUDE_DIRS}
+-    /usr/include/libusb-1.0
+-    /usr/include
+-    /usr/local/include
+-  )
+-
+-#standard library name for libusb-1.0
+-set(libusb1_library_names usb-1.0)
+-
+-#libusb-1.0 compatible library on freebsd
+-if((CMAKE_SYSTEM_NAME STREQUAL "FreeBSD") OR (CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD"))
+-    list(APPEND libusb1_library_names usb)
+-endif()
+-
+-  find_library(LIBUSB_LIBRARIES
+-    NAMES ${libusb1_library_names}
+-    PATHS
+-    ${LIBUSB_PKG_LIBRARY_DIRS}
+-    /usr/lib
+-    /usr/local/lib
+-  )
+-
+-include(CheckFunctionExists)
+-if(LIBUSB_INCLUDE_DIRS)
+-    set(CMAKE_REQUIRED_INCLUDES ${LIBUSB_INCLUDE_DIRS})
+-endif()
+-if(LIBUSB_LIBRARIES)
+-    set(CMAKE_REQUIRED_LIBRARIES ${LIBUSB_LIBRARIES})
+-endif()
+-
+-CHECK_FUNCTION_EXISTS("libusb_handle_events_timeout_completed" HAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED)
+-if(HAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED)
+-    add_definitions(-DHAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED=1)
+-endif(HAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED)
+-
+-CHECK_FUNCTION_EXISTS("libusb_error_name" HAVE_LIBUSB_ERROR_NAME)
+-if(HAVE_LIBUSB_ERROR_NAME)
+-    add_definitions(-DHAVE_LIBUSB_ERROR_NAME=1)
+-endif(HAVE_LIBUSB_ERROR_NAME)
+-
+-if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARIES)
+-  set(LIBUSB_FOUND TRUE CACHE INTERNAL "libusb-1.0 found")
+-  message(STATUS "Found libusb-1.0: ${LIBUSB_INCLUDE_DIR}, ${LIBUSB_LIBRARIES}")
+-else(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARIES)
+-  set(LIBUSB_FOUND FALSE CACHE INTERNAL "libusb-1.0 found")
+-  message(STATUS "libusb-1.0 not found.")
+-endif(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARIES)
+-
+-mark_as_advanced(LIBUSB_INCLUDE_DIR LIBUSB_LIBRARIES)
+-
+-endif(NOT LIBUSB_FOUND)
+diff --git a/cmake/Modules/FindThreads.cmake b/cmake/Modules/FindThreads.cmake
+deleted file mode 100644
+index 8028b15..0000000
+--- a/cmake/Modules/FindThreads.cmake
++++ /dev/null
+@@ -1,246 +0,0 @@
+-# Updated FindThreads.cmake that supports pthread-win32
+-# Downloaded from http://www.vtk.org/Bug/bug_view_advanced_page.php?bug_id=6399
+-
+-# - This module determines the thread library of the system.
+-#
+-# The following variables are set
+-#  CMAKE_THREAD_LIBS_INIT     - the thread library
+-#  CMAKE_USE_SPROC_INIT       - are we using sproc?
+-#  CMAKE_USE_WIN32_THREADS_INIT - using WIN32 threads?
+-#  CMAKE_USE_PTHREADS_INIT    - are we using pthreads
+-#  CMAKE_HP_PTHREADS_INIT     - are we using hp pthreads
+-#
+-# If use of pthreads-win32 is desired, the following variables
+-# can be set.
+-#
+-#  THREADS_USE_PTHREADS_WIN32 -
+-#    Setting this to true searches for the pthreads-win32
+-#    port (since CMake 2.8.0)
+-#
+-#  THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME
+-#      C  = no exceptions (default)
+-#         (NOTE: This is the default scheme on most POSIX thread
+-#          implementations and what you should probably be using)
+-#      CE = C++ Exception Handling
+-#      SE = Structure Exception Handling (MSVC only)
+-#      (NOTE: Changing this option from the default may affect
+-#       the portability of your application.  See pthreads-win32
+-#       documentation for more details.)
+-#
+-#======================================================
+-# Example usage where threading library
+-# is provided by the system:
+-#
+-#   find_package(Threads REQUIRED)
+-#   add_executable(foo foo.cc)
+-#   target_link_libraries(foo ${CMAKE_THREAD_LIBS_INIT})
+-#
+-# Example usage if pthreads-win32 is desired on Windows
+-# or a system provided thread library:
+-#
+-#   set(THREADS_USE_PTHREADS_WIN32 true)
+-#   find_package(Threads REQUIRED)
+-#   include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
+-#
+-#   add_executable(foo foo.cc)
+-#   target_link_libraries(foo ${CMAKE_THREAD_LIBS_INIT})
+-#
+-
+-INCLUDE (CheckIncludeFiles)
+-INCLUDE (CheckLibraryExists)
+-SET(Threads_FOUND FALSE)
+-
+-IF(WIN32 AND NOT CYGWIN AND THREADS_USE_PTHREADS_WIN32)
+-  SET(_Threads_ptwin32 true)
+-ENDIF()
+-
+-# Do we have sproc?
+-IF(CMAKE_SYSTEM MATCHES IRIX)
+-  CHECK_INCLUDE_FILES("sys/types.h;sys/prctl.h"  CMAKE_HAVE_SPROC_H)
+-ENDIF()
+-
+-IF(CMAKE_HAVE_SPROC_H)
+-  # We have sproc
+-  SET(CMAKE_USE_SPROC_INIT 1)
+-
+-ELSEIF(_Threads_ptwin32)
+-
+-  IF(NOT DEFINED THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME)
+-    # Assign the default scheme
+-    SET(THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME "C")
+-  ELSE()
+-    # Validate the scheme specified by the user
+-    IF(NOT THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME STREQUAL "C" AND
+-       NOT THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME STREQUAL "CE" AND
+-       NOT THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME STREQUAL "SE")
+-         MESSAGE(FATAL_ERROR "See documentation for FindPthreads.cmake, only C, CE, and SE modes are allowed")
+-    ENDIF()
+-    IF(NOT MSVC AND THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME STREQUAL "SE")
+-      MESSAGE(FATAL_ERROR "Structured Exception Handling is only allowed for MSVC")
+-    ENDIF(NOT MSVC AND THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME STREQUAL "SE")
+-  ENDIF()
+-
+-  FIND_PATH(THREADS_PTHREADS_INCLUDE_DIR pthread.h)
+-
+-  # Determine the library filename
+-  IF(MSVC)
+-    SET(_Threads_pthreads_libname
+-        pthreadV${THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME}2)
+-  ELSEIF(MINGW)
+-    SET(_Threads_pthreads_libname
+-        pthreadG${THREADS_PTHREADS_WIN32_EXCEPTION_SCHEME}2)
+-  ELSE()
+-    MESSAGE(FATAL_ERROR "This should never happen")
+-  ENDIF()
+-
+-  # Use the include path to help find the library if possible
+-  SET(_Threads_lib_paths "")
+-  IF(THREADS_PTHREADS_INCLUDE_DIR)
+-     GET_FILENAME_COMPONENT(_Threads_root_dir
+-                            ${THREADS_PTHREADS_INCLUDE_DIR} PATH)
+-     SET(_Threads_lib_paths ${_Threads_root_dir}/lib)
+-  ENDIF()
+-  FIND_LIBRARY(THREADS_PTHREADS_WIN32_LIBRARY
+-               NAMES ${_Threads_pthreads_libname}
+-               PATHS ${_Threads_lib_paths}
+-               DOC "The Portable Threads Library for Win32"
+-               NO_SYSTEM_PATH
+-               )
+-
+-  IF(THREADS_PTHREADS_INCLUDE_DIR AND THREADS_PTHREADS_WIN32_LIBRARY)
+-    MARK_AS_ADVANCED(THREADS_PTHREADS_INCLUDE_DIR)
+-    SET(CMAKE_THREAD_LIBS_INIT ${THREADS_PTHREADS_WIN32_LIBRARY})
+-    SET(CMAKE_HAVE_THREADS_LIBRARY 1)
+-    SET(Threads_FOUND TRUE)
+-  ENDIF()
+-
+-  MARK_AS_ADVANCED(THREADS_PTHREADS_WIN32_LIBRARY)
+-
+-ELSE()
+-  # Do we have pthreads?
+-  CHECK_INCLUDE_FILES("pthread.h" CMAKE_HAVE_PTHREAD_H)
+-  IF(CMAKE_HAVE_PTHREAD_H)
+-
+-    #
+-    # We have pthread.h
+-    # Let's check for the library now.
+-    #
+-    SET(CMAKE_HAVE_THREADS_LIBRARY)
+-    IF(NOT THREADS_HAVE_PTHREAD_ARG)
+-
+-      # Do we have -lpthreads
+-      CHECK_LIBRARY_EXISTS(pthreads pthread_create "" CMAKE_HAVE_PTHREADS_CREATE)
+-      IF(CMAKE_HAVE_PTHREADS_CREATE)
+-        SET(CMAKE_THREAD_LIBS_INIT "-lpthreads")
+-        SET(CMAKE_HAVE_THREADS_LIBRARY 1)
+-        SET(Threads_FOUND TRUE)
+-      ENDIF()
+-
+-      # Ok, how about -lpthread
+-      CHECK_LIBRARY_EXISTS(pthread pthread_create "" CMAKE_HAVE_PTHREAD_CREATE)
+-      IF(CMAKE_HAVE_PTHREAD_CREATE)
+-        SET(CMAKE_THREAD_LIBS_INIT "-lpthread")
+-        SET(Threads_FOUND TRUE)
+-        SET(CMAKE_HAVE_THREADS_LIBRARY 1)
+-      ENDIF()
+-
+-      IF(CMAKE_SYSTEM MATCHES "SunOS.*")
+-        # On sun also check for -lthread
+-        CHECK_LIBRARY_EXISTS(thread thr_create "" CMAKE_HAVE_THR_CREATE)
+-        IF(CMAKE_HAVE_THR_CREATE)
+-          SET(CMAKE_THREAD_LIBS_INIT "-lthread")
+-          SET(CMAKE_HAVE_THREADS_LIBRARY 1)
+-          SET(Threads_FOUND TRUE)
+-        ENDIF()
+-      ENDIF(CMAKE_SYSTEM MATCHES "SunOS.*")
+-
+-    ENDIF(NOT THREADS_HAVE_PTHREAD_ARG)
+-
+-    IF(NOT CMAKE_HAVE_THREADS_LIBRARY)
+-      # If we did not found -lpthread, -lpthread, or -lthread, look for -pthread
+-      IF("THREADS_HAVE_PTHREAD_ARG" MATCHES "^THREADS_HAVE_PTHREAD_ARG")
+-        MESSAGE(STATUS "Check if compiler accepts -pthread")
+-        TRY_RUN(THREADS_PTHREAD_ARG THREADS_HAVE_PTHREAD_ARG
+-          ${CMAKE_BINARY_DIR}
+-          ${CMAKE_ROOT}/Modules/CheckForPthreads.c
+-          CMAKE_FLAGS -DLINK_LIBRARIES:STRING=-pthread
+-          COMPILE_OUTPUT_VARIABLE OUTPUT)
+-
+-        IF(THREADS_HAVE_PTHREAD_ARG)
+-          IF(THREADS_PTHREAD_ARG MATCHES "^2$")
+-            SET(Threads_FOUND TRUE)
+-            MESSAGE(STATUS "Check if compiler accepts -pthread - yes")
+-          ELSE()
+-            MESSAGE(STATUS "Check if compiler accepts -pthread - no")
+-            FILE(APPEND
+-              ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
+-              "Determining if compiler accepts -pthread returned ${THREADS_PTHREAD_ARG} instead of 2. The compiler had the following output:\n${OUTPUT}\n\n")
+-          ENDIF()
+-        ELSE()
+-          MESSAGE(STATUS "Check if compiler accepts -pthread - no")
+-          FILE(APPEND
+-            ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
+-            "Determining if compiler accepts -pthread failed with the following output:\n${OUTPUT}\n\n")
+-        ENDIF()
+-
+-      ENDIF("THREADS_HAVE_PTHREAD_ARG" MATCHES "^THREADS_HAVE_PTHREAD_ARG")
+-
+-      IF(THREADS_HAVE_PTHREAD_ARG)
+-        SET(Threads_FOUND TRUE)
+-        SET(CMAKE_THREAD_LIBS_INIT "-pthread")
+-      ENDIF()
+-
+-    ENDIF(NOT CMAKE_HAVE_THREADS_LIBRARY)
+-  ENDIF(CMAKE_HAVE_PTHREAD_H)
+-ENDIF()
+-
+-IF(CMAKE_THREAD_LIBS_INIT)
+-  SET(CMAKE_USE_PTHREADS_INIT 1)
+-  SET(Threads_FOUND TRUE)
+-ENDIF()
+-
+-IF(CMAKE_SYSTEM MATCHES "Windows"
+-   AND NOT THREADS_USE_PTHREADS_WIN32)
+-  SET(CMAKE_USE_WIN32_THREADS_INIT 1)
+-  SET(Threads_FOUND TRUE)
+-ENDIF()
+-
+-IF(CMAKE_USE_PTHREADS_INIT)
+-  IF(CMAKE_SYSTEM MATCHES "HP-UX-*")
+-    # Use libcma if it exists and can be used.  It provides more
+-    # symbols than the plain pthread library.  CMA threads
+-    # have actually been deprecated:
+-    #   http://docs.hp.com/en/B3920-90091/ch12s03.html#d0e11395
+-    #   http://docs.hp.com/en/947/d8.html
+-    # but we need to maintain compatibility here.
+-    # The CMAKE_HP_PTHREADS setting actually indicates whether CMA threads
+-    # are available.
+-    CHECK_LIBRARY_EXISTS(cma pthread_attr_create "" CMAKE_HAVE_HP_CMA)
+-    IF(CMAKE_HAVE_HP_CMA)
+-      SET(CMAKE_THREAD_LIBS_INIT "-lcma")
+-      SET(CMAKE_HP_PTHREADS_INIT 1)
+-      SET(Threads_FOUND TRUE)
+-    ENDIF(CMAKE_HAVE_HP_CMA)
+-    SET(CMAKE_USE_PTHREADS_INIT 1)
+-  ENDIF()
+-
+-  IF(CMAKE_SYSTEM MATCHES "OSF1-V*")
+-    SET(CMAKE_USE_PTHREADS_INIT 0)
+-    SET(CMAKE_THREAD_LIBS_INIT )
+-  ENDIF()
+-
+-  IF(CMAKE_SYSTEM MATCHES "CYGWIN_NT*")
+-    SET(CMAKE_USE_PTHREADS_INIT 1)
+-    SET(Threads_FOUND TRUE)
+-    SET(CMAKE_THREAD_LIBS_INIT )
+-    SET(CMAKE_USE_WIN32_THREADS_INIT 0)
+-  ENDIF()
+-ENDIF(CMAKE_USE_PTHREADS_INIT)
+-
+-INCLUDE(FindPackageHandleStandardArgs)
+-IF(_Threads_ptwin32)
+-  FIND_PACKAGE_HANDLE_STANDARD_ARGS(Threads DEFAULT_MSG
+-    THREADS_PTHREADS_WIN32_LIBRARY THREADS_PTHREADS_INCLUDE_DIR)
+-ELSE()
+-  FIND_PACKAGE_HANDLE_STANDARD_ARGS(Threads DEFAULT_MSG Threads_FOUND)
+-ENDIF()
+diff --git a/cmake/rtlsdrConfig.cmake b/cmake/rtlsdrConfig.cmake
+new file mode 100644
+index 0000000..eeff2f3
+--- /dev/null
++++ b/cmake/rtlsdrConfig.cmake
+@@ -0,0 +1,8 @@
++include(FindPkgConfig)
++pkg_check_modules(LIBUSB libusb-1.0 IMPORTED_TARGET)
++
++get_filename_component(RTLSDR_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
++
++if(NOT TARGET rtlsdr::rtlsdr)
++  include("${RTLSDR_CMAKE_DIR}/rtlsdrTargets.cmake")
++endif()
+diff --git a/configure.ac b/configure.ac
+index 5b94828..1afbfbd 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -101,6 +101,12 @@ AC_ARG_ENABLE(driver-detach,
+     CFLAGS="$CFLAGS -DDETACH_KERNEL_DRIVER"
+ fi])
+ 
++AC_ARG_ENABLE(zerocopy,
++[  --enable-zerocopy          Enable usbfs zero-copy support (disabled by default)],
++[if test x$enableval = xyes; then
++    CFLAGS="$CFLAGS -DENABLE_ZEROCOPY"
++fi])
++
+ dnl Generate the output
+ AC_CONFIG_HEADER(config.h)
+ 
+diff --git a/contrib/jenkins.sh b/contrib/jenkins.sh
+index cb566f1..0538406 100755
+--- a/contrib/jenkins.sh
++++ b/contrib/jenkins.sh
+@@ -36,5 +36,6 @@ LD_LIBRARY_PATH="$inst/lib" \
+   DISTCHECK_CONFIGURE_FLAGS="--enable-werror" \
+   $MAKE distcheck \
+   || cat-testlogs.sh
++$MAKE maintainer-clean
+ 
+ osmo-clean-workspace.sh
+diff --git a/debian/changelog b/debian/changelog
+index 24d97e2..c218709 100644
+--- a/debian/changelog
++++ b/debian/changelog
+@@ -1,4 +1,11 @@
+-rtl-sdr (0.6git) unstable; urgency=medium
++rtl-sdr (0.6) unstable; urgency=medium
++
++  * New upstream release
++  * with modernize-cmake patch
++
++ -- A. Maitland Bottoms <bottoms@debian.org>  Sat, 06 Oct 2018 20:28:26 -0400
++
++rtl-sdr (0.6~git) unstable; urgency=medium
+ 
+   * New upstream release
+ 
+diff --git a/debian/compat b/debian/compat
+index ec63514..f599e28 100644
+--- a/debian/compat
++++ b/debian/compat
+@@ -1 +1 @@
+-9
++10
+diff --git a/debian/control b/debian/control
+index c77877d..50eb1fb 100644
+--- a/debian/control
++++ b/debian/control
+@@ -3,10 +3,11 @@ Section: comm
+ Priority: optional
+ Maintainer: A. Maitland Bottoms <bottoms@debian.org>
+ Build-Depends: cmake,
+-               debhelper (>= 9.0.0~),
++               debhelper (>= 10~),
+                libusb-1.0-0-dev [linux-any],
+                libusb-dev [hurd-i386],
+-               libusb2-dev [kfreebsd-any]
++               libusb2-dev [kfreebsd-any],
++	       pkg-config
+ Standards-Version: 4.1.4
+ Homepage: http://sdr.osmocom.org/trac/wiki/rtl-sdr
+ Vcs-Browser: https://salsa.debian.org/bottoms/pkg-rtl-sdr
+diff --git a/debian/librtlsdr-dev.acc b/debian/librtlsdr-dev.acc
+new file mode 100644
+index 0000000..282f2cd
+--- /dev/null
++++ b/debian/librtlsdr-dev.acc
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="utf-8"?>
++<descriptor>
++
++<gcc_options>
++  -fPIC
++  -g
++  -O2
++  -fstack-protector-strong
++  -Wformat
++  -Werror=format-security
++  -Wdate-time
++  -D_FORTIFY_SOURCE=2
++  -fvisibility=hidden
++  -Wsign-compare
++  -Wall
++  -Wno-uninitialized
++</gcc_options>
++
++<headers>
++debian/librtlsdr-dev/usr/include/
++</headers>
++
++<libs>
++debian/librtlsdr0/usr/lib/
++</libs>
++
++</descriptor>
+diff --git a/debian/librtlsdr-dev.install b/debian/librtlsdr-dev.install
+index 76f28fa..c5f0576 100644
+--- a/debian/librtlsdr-dev.install
++++ b/debian/librtlsdr-dev.install
+@@ -2,3 +2,4 @@ usr/include/*
+ usr/lib/*/lib*.a
+ usr/lib/*/lib*.so
+ usr/lib/*/pkgconfig/*
++usr/lib/*/cmake/*
+diff --git a/debian/librtlsdr0.udev b/debian/librtlsdr0.udev
+index b2f4054..5709870 100644
+--- a/debian/librtlsdr0.udev
++++ b/debian/librtlsdr0.udev
+@@ -13,130 +13,127 @@
+ #
+ # You should have received a copy of the GNU General Public License
+ # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-#
++# MODE="0664", GROUP="plugdev"
+ 
+ # original RTL2832U vid/pid (hama nano, for example)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # RTL2832U OEM vid/pid, e.g. ezcap EzTV668 (E4000), Newsky TV28T (E4000/R820T) etc.
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # DigitalNow Quad DVB-T PCI-E card (4x FC0012?)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6680", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Leadtek WinFast DTV Dongle mini D (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6f0f", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6f0f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Genius TVGo DVB-T03 USB dongle (Ver. B)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0458", ATTRS{idProduct}=="707f", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0458", ATTRS{idProduct}=="707f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Cinergy T Stick Black (rev 1) (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00a9", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00a9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON rev 1 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b3", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Deutschlandradio DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b4", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON DAB Stick - Radio Energy (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b5", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b5", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Media Broadcast DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b7", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec BR DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b8", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec WDR DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b9", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec MuellerVerlag DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Fraunhofer DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c6", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c6", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Cinergy T Stick RC (Rev.3) (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d3", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec T Stick PLUS (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d7", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON rev 2 (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00e0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00e0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # PixelView PV-DT235U(RN) (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1554", ATTRS{idProduct}=="5020", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1554", ATTRS{idProduct}=="5020", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Astrometa DVB-T/DVB-T2 (R828D)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0131", MODE:="0666"
+-
+-# HanfTek DAB+FM+DVB-T
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0133", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0131", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U620F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0620", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0620", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U650F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0650", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0650", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U680F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0680", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # GIGABYTE GT-U7300 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d393", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d393", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # DIKOM USB-DVBT HD
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d394", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d394", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Peak 102569AGPK (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d395", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d395", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # KWorld KW-UB450-T USB DVB-T Pico TV (TUA9001)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d397", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d397", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Zaapa ZT-MINDVBZP (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d398", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d398", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV20 DVB-T USB & FM (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d39d", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d39d", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Twintech UT-40 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a4", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # ASUS U3100MINI_PLUS_V2 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a8", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV27 DVB-T USB & FM (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3af", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3af", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV21 DVB-T USB & FM
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3b0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3b0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK DVB-T Dongle (Logilink VG0002A) (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1101", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1101", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK DVB-T Dongle (MSI DigiVox mini II V3.0)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1102", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1102", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK 5217 DVB-T Dongle (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1103", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1103", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # MSI DigiVox Micro HD (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1104", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1104", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Sweex DVB-T USB (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="a803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="a803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # GTek T803 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="b803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="b803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Lifeview LV5TDeluxe (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="c803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="c803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # MyGica TD312 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d286", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d286", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # PROlectrix DV107669 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+diff --git a/debian/rules b/debian/rules
+index 901ea73..087f0dc 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -3,10 +3,16 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+ export DEB_HOST_MULTIARCH
+ 
+ %:
+-	dh $@
++	dh $@ --buildsystem=cmake
+ 
+ override_dh_auto_configure: debian/librtlsdr0.udev
+-	dh_auto_configure -- -DLIB_INSTALL_DIR=lib/$(DEB_HOST_MULTIARCH) -DDETACH_KERNEL_DRIVER=ON
++	dh_auto_configure --buildsystem=cmake -- -DDETACH_KERNEL_DRIVER=ON \
++						 -DINSTALL_UDEV_RULES=ON \
++						 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+ 
+ debian/librtlsdr0.udev: rtl-sdr.rules
+ 	cp -p rtl-sdr.rules debian/librtlsdr0.udev
++
++override_dh_acc:
++	- dh_acc
++	- cat debian/librtlsdr-dev/usr/lib/x86_64-linux-gnu/dh-acc/librtlsdr-dev_*_report.html
+diff --git a/include/rtl-sdr.h b/include/rtl-sdr.h
+index 3ed13ae..d64701e 100644
+--- a/include/rtl-sdr.h
++++ b/include/rtl-sdr.h
+@@ -389,6 +389,17 @@ RTLSDR_API int rtlsdr_cancel_async(rtlsdr_dev_t *dev);
+  */
+ RTLSDR_API int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on);
+ 
++/*!
++ * Enable or disable the bias tee on the given GPIO pin.
++ *
++ * \param dev the device handle given by rtlsdr_open()
++ * \param gpio the gpio pin to configure as a Bias T control.
++ * \param on  1 for Bias T on. 0 for Bias T off.
++ * \return -1 if device is not initialized. 0 otherwise.
++ */
++RTLSDR_API int rtlsdr_set_bias_tee_gpio(rtlsdr_dev_t *dev, int gpio, int on);
++
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/librtlsdr.pc.in b/librtlsdr.pc.in
+index 5e55049..e46519a 100644
+--- a/librtlsdr.pc.in
++++ b/librtlsdr.pc.in
+@@ -6,6 +6,6 @@ includedir=@includedir@
+ Name: RTL-SDR Library
+ Description: C Utility Library
+ Version: @VERSION@
+-Cflags: -I${includedir}/ @RTLSDR_PC_CFLAGS@
+-Libs: -L${libdir} -lrtlsdr -lusb-1.0
+-Libs.private: @RTLSDR_PC_LIBS@
++Cflags: -I${includedir}/
++Libs: -L${libdir} -lrtlsdr
++Libs.private:  -lusb-1.0 @RTLSDR_PC_LIBS@
+diff --git a/rtl-sdr.rules b/rtl-sdr.rules
+index b2f4054..83fca70 100644
+--- a/rtl-sdr.rules
++++ b/rtl-sdr.rules
+@@ -16,127 +16,127 @@
+ #
+ 
+ # original RTL2832U vid/pid (hama nano, for example)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # RTL2832U OEM vid/pid, e.g. ezcap EzTV668 (E4000), Newsky TV28T (E4000/R820T) etc.
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # DigitalNow Quad DVB-T PCI-E card (4x FC0012?)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6680", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Leadtek WinFast DTV Dongle mini D (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6f0f", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6f0f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Genius TVGo DVB-T03 USB dongle (Ver. B)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0458", ATTRS{idProduct}=="707f", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0458", ATTRS{idProduct}=="707f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Cinergy T Stick Black (rev 1) (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00a9", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00a9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON rev 1 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b3", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Deutschlandradio DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b4", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON DAB Stick - Radio Energy (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b5", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b5", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Media Broadcast DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b7", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec BR DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b8", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec WDR DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b9", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec MuellerVerlag DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Fraunhofer DAB Stick (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c6", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c6", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec Cinergy T Stick RC (Rev.3) (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d3", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec T Stick PLUS (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d7", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Terratec NOXON rev 2 (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00e0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00e0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # PixelView PV-DT235U(RN) (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1554", ATTRS{idProduct}=="5020", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1554", ATTRS{idProduct}=="5020", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Astrometa DVB-T/DVB-T2 (R828D)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0131", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0131", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # HanfTek DAB+FM+DVB-T
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0133", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0133", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U620F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0620", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0620", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U650F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0650", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0650", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Compro Videomate U680F (E4000)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0680", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # GIGABYTE GT-U7300 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d393", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d393", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # DIKOM USB-DVBT HD
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d394", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d394", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Peak 102569AGPK (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d395", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d395", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # KWorld KW-UB450-T USB DVB-T Pico TV (TUA9001)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d397", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d397", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Zaapa ZT-MINDVBZP (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d398", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d398", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV20 DVB-T USB & FM (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d39d", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d39d", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Twintech UT-40 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a4", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # ASUS U3100MINI_PLUS_V2 (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a8", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV27 DVB-T USB & FM (FC0013)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3af", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3af", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # SVEON STV21 DVB-T USB & FM
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3b0", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3b0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK DVB-T Dongle (Logilink VG0002A) (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1101", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1101", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK DVB-T Dongle (MSI DigiVox mini II V3.0)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1102", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1102", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Dexatek DK 5217 DVB-T Dongle (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1103", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1103", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # MSI DigiVox Micro HD (FC2580)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1104", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1104", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Sweex DVB-T USB (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="a803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="a803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # GTek T803 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="b803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="b803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # Lifeview LV5TDeluxe (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="c803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="c803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # MyGica TD312 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d286", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d286", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+ 
+ # PROlectrix DV107669 (FC0012)
+-SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d803", MODE:="0666"
++SUBSYSTEMS=="usb", ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev"
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 07d64ab..7b47309 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -1,34 +1,56 @@
+-# Copyright 2012 OSMOCOM Project
++# Copyright 2012-2020 Osmocom Project
+ #
+ # This file is part of rtl-sdr
+ #
+-# GNU Radio is free software; you can redistribute it and/or modify
++# This program is free software: you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+-# the Free Software Foundation; either version 3, or (at your option)
+-# any later version.
++# the Free Software Foundation, either version 2 of the License, or
++# (at your option) any later version.
+ #
+-# GNU Radio is distributed in the hope that it will be useful,
++# This program is distributed in the hope that it will be useful,
+ # but WITHOUT ANY WARRANTY; without even the implied warranty of
+ # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ # GNU General Public License for more details.
+ #
+ # You should have received a copy of the GNU General Public License
+-# along with GNU Radio; see the file COPYING.  If not, write to
+-# the Free Software Foundation, Inc., 51 Franklin Street,
+-# Boston, MA 02110-1301, USA.
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ 
+-MACRO(RTLSDR_APPEND_SRCS)
+-    LIST(APPEND rtlsdr_srcs ${ARGV})
+-ENDMACRO(RTLSDR_APPEND_SRCS)
++########################################################################
++# Setup shared library variant
++########################################################################
++add_library(rtlsdr SHARED librtlsdr.c
++  tuner_e4k.c tuner_fc0012.c tuner_fc0013.c tuner_fc2580.c tuner_r82xx.c)
++target_link_libraries(rtlsdr ${LIBUSB_LIBRARIES} ${THREADS_PTHREADS_LIBRARY})
++target_include_directories(rtlsdr PUBLIC
++  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
++  $<INSTALL_INTERFACE:include>  # <prefix>/include
++  ${LIBUSB_INCLUDE_DIRS}
++  ${THREADS_PTHREADS_INCLUDE_DIR}
++  )
++set_target_properties(rtlsdr PROPERTIES DEFINE_SYMBOL "rtlsdr_EXPORTS")
++set_target_properties(rtlsdr PROPERTIES OUTPUT_NAME rtlsdr)
++set_target_properties(rtlsdr PROPERTIES SOVERSION ${MAJOR_VERSION})
++set_target_properties(rtlsdr PROPERTIES VERSION ${LIBVER})
++generate_export_header(rtlsdr)
+ 
+-RTLSDR_APPEND_SRCS(
+-    librtlsdr.c
+-    tuner_e4k.c
+-    tuner_fc0012.c
+-    tuner_fc0013.c
+-    tuner_fc2580.c
+-    tuner_r82xx.c
+-)
++########################################################################
++# Setup static library variant
++########################################################################
++add_library(rtlsdr_static STATIC librtlsdr.c
++  tuner_e4k.c tuner_fc0012.c tuner_fc0013.c tuner_fc2580.c tuner_r82xx.c)
++target_link_libraries(rtlsdr ${LIBUSB_LIBRARIES} ${THREADS_PTHREADS_LIBRARY})
++target_include_directories(rtlsdr_static PUBLIC
++  $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
++  $<INSTALL_INTERFACE:include>  # <prefix>/include
++  ${LIBUSB_INCLUDE_DIRS}
++  ${THREADS_PTHREADS_INCLUDE_DIR}
++  )
++set_property(TARGET rtlsdr_static APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
++if(NOT WIN32)
++# Force same library filename for static and shared variants of the library
++set_target_properties(rtlsdr_static PROPERTIES OUTPUT_NAME rtlsdr)
++endif()
++generate_export_header(rtlsdr_static)
+ 
+ ########################################################################
+ # Set up Windows DLL resource files
+@@ -40,44 +62,24 @@ IF(MSVC)
+         ${CMAKE_CURRENT_SOURCE_DIR}/rtlsdr.rc.in
+         ${CMAKE_CURRENT_BINARY_DIR}/rtlsdr.rc
+     @ONLY)
+-
+-    RTLSDR_APPEND_SRCS(${CMAKE_CURRENT_BINARY_DIR}/rtlsdr.rc)
++  target_sources(rtlsdr PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rtlsdr.rc)
++  target_sources(rtlsdr_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/rtlsdr.rc)
+ ENDIF(MSVC)
+ 
+-########################################################################
+-# Setup shared library variant
+-########################################################################
+-add_library(rtlsdr_shared SHARED ${rtlsdr_srcs})
+-target_link_libraries(rtlsdr_shared ${LIBUSB_LIBRARIES})
+-set_target_properties(rtlsdr_shared PROPERTIES DEFINE_SYMBOL "rtlsdr_EXPORTS")
+-set_target_properties(rtlsdr_shared PROPERTIES OUTPUT_NAME rtlsdr)
+-set_target_properties(rtlsdr_shared PROPERTIES SOVERSION ${MAJOR_VERSION})
+-set_target_properties(rtlsdr_shared PROPERTIES VERSION ${LIBVER})
+-
+-########################################################################
+-# Setup static library variant
+-########################################################################
+-add_library(rtlsdr_static STATIC ${rtlsdr_srcs})
+-target_link_libraries(rtlsdr_static ${LIBUSB_LIBRARIES})
+-set_property(TARGET rtlsdr_static APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+-if(NOT WIN32)
+-# Force same library filename for static and shared variants of the library
+-set_target_properties(rtlsdr_static PROPERTIES OUTPUT_NAME rtlsdr)
+-endif()
+-
+ ########################################################################
+ # Setup libraries used in executables
+ ########################################################################
+ add_library(convenience_static STATIC
+     convenience/convenience.c
+ )
+-
++target_include_directories(convenience_static
++  PRIVATE ${CMAKE_SOURCE_DIR}/include)
+ if(WIN32)
+ add_library(libgetopt_static STATIC
+     getopt/getopt.c
+ )
+ target_link_libraries(convenience_static
+-    rtlsdr_shared
++    rtlsdr
+ )
+ endif()
+ 
+@@ -91,33 +93,38 @@ add_executable(rtl_fm rtl_fm.c)
+ add_executable(rtl_eeprom rtl_eeprom.c)
+ add_executable(rtl_adsb rtl_adsb.c)
+ add_executable(rtl_power rtl_power.c)
+-set(INSTALL_TARGETS rtlsdr_shared rtlsdr_static rtl_sdr rtl_tcp rtl_test rtl_fm rtl_eeprom rtl_adsb rtl_power)
++add_executable(rtl_biast rtl_biast.c)
++set(INSTALL_TARGETS rtlsdr rtlsdr_static rtl_sdr rtl_tcp rtl_test rtl_fm rtl_eeprom rtl_adsb rtl_power rtl_biast)
+ 
+-target_link_libraries(rtl_sdr rtlsdr_shared convenience_static
++target_link_libraries(rtl_sdr rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_tcp rtlsdr_shared convenience_static
++target_link_libraries(rtl_tcp rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_test rtlsdr_shared convenience_static
++target_link_libraries(rtl_test rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_fm rtlsdr_shared convenience_static
++target_link_libraries(rtl_fm rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_eeprom rtlsdr_shared convenience_static
++target_link_libraries(rtl_eeprom rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_adsb rtlsdr_shared convenience_static
++target_link_libraries(rtl_adsb rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+-target_link_libraries(rtl_power rtlsdr_shared convenience_static
++target_link_libraries(rtl_power rtlsdr convenience_static
++    ${LIBUSB_LIBRARIES}
++    ${CMAKE_THREAD_LIBS_INIT}
++)
++target_link_libraries(rtl_biast rtlsdr convenience_static
+     ${LIBUSB_LIBRARIES}
+     ${CMAKE_THREAD_LIBS_INIT}
+ )
+@@ -125,7 +132,7 @@ if(UNIX)
+ target_link_libraries(rtl_fm m)
+ target_link_libraries(rtl_adsb m)
+ target_link_libraries(rtl_power m)
+-if(APPLE)
++if(APPLE OR CMAKE_SYSTEM MATCHES "OpenBSD")
+     target_link_libraries(rtl_test m)
+ else()
+     target_link_libraries(rtl_test m rt)
+@@ -140,6 +147,7 @@ target_link_libraries(rtl_fm libgetopt_static)
+ target_link_libraries(rtl_eeprom libgetopt_static)
+ target_link_libraries(rtl_adsb libgetopt_static)
+ target_link_libraries(rtl_power libgetopt_static)
++target_link_libraries(rtl_biast libgetopt_static)
+ set_property(TARGET rtl_sdr APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ set_property(TARGET rtl_tcp APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ set_property(TARGET rtl_test APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+@@ -147,12 +155,17 @@ set_property(TARGET rtl_fm APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ set_property(TARGET rtl_eeprom APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ set_property(TARGET rtl_adsb APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ set_property(TARGET rtl_power APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
++set_property(TARGET rtl_biast APPEND PROPERTY COMPILE_DEFINITIONS "rtlsdr_STATIC" )
+ endif()
+ ########################################################################
+ # Install built library files & utilities
+ ########################################################################
+-install(TARGETS ${INSTALL_TARGETS}
+-    LIBRARY DESTINATION ${LIB_INSTALL_DIR} # .so/.dylib file
+-    ARCHIVE DESTINATION ${LIB_INSTALL_DIR} # .lib file
+-    RUNTIME DESTINATION bin              # .dll file
+-)
++install(TARGETS rtlsdr EXPORT RTLSDR-export
++  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} # .so/.dylib file
++  )
++install(TARGETS rtlsdr_static EXPORT RTLSDR-export
++  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} # .so/.dylib file
++  )
++install(TARGETS rtl_sdr rtl_tcp rtl_test rtl_fm rtl_eeprom rtl_adsb rtl_power rtl_biast
++  DESTINATION ${CMAKE_INSTALL_BINDIR}
++  )
+diff --git a/src/librtlsdr.c b/src/librtlsdr.c
+index 433ed5b..096abae 100644
+--- a/src/librtlsdr.c
++++ b/src/librtlsdr.c
+@@ -39,12 +39,6 @@
+ #define LIBUSB_CALL
+ #endif
+ 
+-/* libusb < 1.0.9 doesn't have libusb_handle_events_timeout_completed */
+-#ifndef HAVE_LIBUSB_HANDLE_EVENTS_TIMEOUT_COMPLETED
+-#define libusb_handle_events_timeout_completed(ctx, tv, c) \
+-	libusb_handle_events_timeout(ctx, tv)
+-#endif
+-
+ /* two raised to the power of n */
+ #define TWO_POW(n)		((double)(1ULL<<(n)))
+ 
+@@ -1628,6 +1622,9 @@ found:
+ 	return 0;
+ err:
+ 	if (dev) {
++		if (dev->devh)
++			libusb_close(dev->devh);
++
+ 		if (dev->ctx)
+ 			libusb_exit(dev->ctx);
+ 
+@@ -1748,18 +1745,33 @@ static int _rtlsdr_alloc_async_buffers(rtlsdr_dev_t *dev)
+ 	dev->xfer_buf = malloc(dev->xfer_buf_num * sizeof(unsigned char *));
+ 	memset(dev->xfer_buf, 0, dev->xfer_buf_num * sizeof(unsigned char *));
+ 
+-#if defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
++#if defined(ENABLE_ZEROCOPY) && defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
+ 	fprintf(stderr, "Allocating %d zero-copy buffers\n", dev->xfer_buf_num);
+ 
+ 	dev->use_zerocopy = 1;
+ 	for (i = 0; i < dev->xfer_buf_num; ++i) {
+ 		dev->xfer_buf[i] = libusb_dev_mem_alloc(dev->devh, dev->xfer_buf_len);
+ 
+-		if (!dev->xfer_buf[i]) {
++		if (dev->xfer_buf[i]) {
++			/* Check if Kernel usbfs mmap() bug is present: if the
++			 * mapping is correct, the buffers point to memory that
++			 * was memset to 0 by the Kernel, otherwise, they point
++			 * to random memory. We check if the buffers are zeroed
++			 * and otherwise fall back to buffers in userspace.
++			 */
++			if (dev->xfer_buf[i][0] || memcmp(dev->xfer_buf[i],
++							  dev->xfer_buf[i] + 1,
++							  dev->xfer_buf_len - 1)) {
++				fprintf(stderr, "Detected Kernel usbfs mmap() "
++						"bug, falling back to buffers "
++						"in userspace\n");
++				dev->use_zerocopy = 0;
++				break;
++			}
++		} else {
+ 			fprintf(stderr, "Failed to allocate zero-copy "
+ 					"buffer for transfer %d\nFalling "
+ 					"back to buffers in userspace\n", i);
+-
+ 			dev->use_zerocopy = 0;
+ 			break;
+ 		}
+@@ -1912,6 +1924,9 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
+ 					/* handle events after canceling
+ 					 * to allow transfer status to
+ 					 * propagate */
++#ifdef _WIN32
++					Sleep(1);
++#endif
+ 					libusb_handle_events_timeout_completed(dev->ctx,
+ 									       &zerotv, NULL);
+ 					if (r < 0)
+@@ -1991,13 +2006,18 @@ int rtlsdr_i2c_read_fn(void *dev, uint8_t addr, uint8_t *buf, int len)
+ 	return -1;
+ }
+ 
+-int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on)
++int rtlsdr_set_bias_tee_gpio(rtlsdr_dev_t *dev, int gpio, int on)
+ {
+ 	if (!dev)
+ 		return -1;
+ 
+-	rtlsdr_set_gpio_output(dev, 0);
+-	rtlsdr_set_gpio_bit(dev, 0, on);
++	rtlsdr_set_gpio_output(dev, gpio);
++	rtlsdr_set_gpio_bit(dev, gpio, on);
+ 
+ 	return 0;
+ }
++
++int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on)
++{
++	return rtlsdr_set_bias_tee_gpio(dev, 0, on);
++}
+diff --git a/src/rtl_biast.c b/src/rtl_biast.c
+new file mode 100644
+index 0000000..185e838
+--- /dev/null
++++ b/src/rtl_biast.c
+@@ -0,0 +1,101 @@
++/*
++ * rtl-sdr, turns your Realtek RTL2832 based DVB dongle into a SDR receiver
++ * rtl_biast, tool to set bias tee gpio output
++ * Copyright (C) 2012 by Steve Markgraf <steve@steve-m.de>
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <string.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++#ifndef _WIN32
++#include <unistd.h>
++#else
++#include <windows.h>
++#include "getopt/getopt.h"
++#endif
++
++#include "rtl-sdr.h"
++#include "convenience/convenience.h"
++
++static rtlsdr_dev_t *dev = NULL;
++
++void usage(void)
++{
++	fprintf(stderr,
++		"rtl_biast, a tool for turning the RTL-SDR.com \n"
++		"bias tee or any GPIO ON and OFF. Example to turn on the \n"
++		"bias tee: rtl_biast -d 0 -b 1\n"
++		"Any GPIO: rtl_biast -d 0 -g 1 -b 1\n\n"
++		"Usage:\n"
++		"\t[-d device_index (default: 0)]\n"
++		"\t[-b bias_on (default: 0)]\n"
++		"\t[-g GPIO select (default: 0)]\n");
++	exit(1);
++}
++
++int main(int argc, char **argv)
++{
++	int i, r, opt;
++	int dev_index = 0;
++	int dev_given = 0;
++	uint32_t bias_on = 0;
++	uint32_t gpio_pin = 0;
++	int device_count;
++
++	while ((opt = getopt(argc, argv, "d:b:g:h?")) != -1) {
++		switch (opt) {
++		case 'd':
++			dev_index = verbose_device_search(optarg);
++			dev_given = 1;
++			break;
++		case 'b':
++			bias_on = atoi(optarg);
++			break;
++		case 'g':
++			gpio_pin = atoi(optarg);
++			break;
++		default:
++			usage();
++			break;
++		}
++	}
++
++	if (!dev_given) {
++		dev_index = verbose_device_search("0");
++	}
++
++	if (dev_index < 0) {
++		exit(1);
++	}
++
++	r = rtlsdr_open(&dev, dev_index);
++	rtlsdr_set_bias_tee_gpio(dev, gpio_pin, bias_on);
++
++exit:
++	/*
++	 * Note - rtlsdr_close() in this tree does not clear the bias tee
++	 * GPIO line, so it leaves the bias tee enabled if a client program
++	 * doesn't explictly disable it.
++	 *
++	 * If that behaviour changes then another rtlsdr_close() will be
++	 * needed that takes some extension flags, and one of them should
++	 * be to either explicitly close the biast or leave it alone.
++	 */
++	rtlsdr_close(dev);
++
++	return r >= 0 ? r : -r;
++}
+diff --git a/src/rtl_eeprom.c b/src/rtl_eeprom.c
+index f562d73..24be900 100644
+--- a/src/rtl_eeprom.c
++++ b/src/rtl_eeprom.c
+@@ -370,14 +370,14 @@ int main(int argc, char **argv)
+ 	}
+ 
+ 	if (manuf_str)
+-		strncpy((char*)&conf.manufacturer, manuf_str, MAX_STR_SIZE);
++		strncpy((char*)&conf.manufacturer, manuf_str, MAX_STR_SIZE - 1);
+ 
+ 	if (product_str)
+-		strncpy((char*)&conf.product, product_str, MAX_STR_SIZE);
++		strncpy((char*)&conf.product, product_str, MAX_STR_SIZE - 1);
+ 
+ 	if (serial_str) {
+ 		conf.have_serial = 1;
+-		strncpy((char*)&conf.serial, serial_str, MAX_STR_SIZE);
++		strncpy((char*)&conf.serial, serial_str, MAX_STR_SIZE - 1);
+ 	}
+ 
+ 	if (ir_endpoint != 0)
+diff --git a/src/rtl_fm.c b/src/rtl_fm.c
+index b163979..7c84332 100644
+--- a/src/rtl_fm.c
++++ b/src/rtl_fm.c
+@@ -201,11 +201,12 @@ void usage(void)
+ 		"\t[-p ppm_error (default: 0)]\n"
+ 		"\t[-E enable_option (default: none)]\n"
+ 		"\t    use multiple -E to enable multiple options\n"
+-		"\t    edge:   enable lower edge tuning\n"
+-		"\t    dc:     enable dc blocking filter\n"
+-		"\t    deemp:  enable de-emphasis filter\n"
+-		"\t    direct: enable direct sampling\n"
+-		"\t    offset: enable offset tuning\n"
++		"\t    edge:    enable lower edge tuning\n"
++		"\t    dc:      enable dc blocking filter\n"
++		"\t    deemp:   enable de-emphasis filter\n"
++		"\t    direct:  enable direct sampling 1 (usually I)\n"
++		"\t    direct2: enable direct sampling 2 (usually Q)\n"
++		"\t    offset:  enable offset tuning\n"
+ 		"\tfilename ('-' means stdout)\n"
+ 		"\t    omitting the filename also uses stdout\n\n"
+ 		"Experimental options:\n"
+@@ -892,7 +893,7 @@ static void *controller_thread_fn(void *arg)
+ 	/* set up primary channel */
+ 	optimal_settings(s->freqs[0], demod.rate_in);
+ 	if (dongle.direct_sampling) {
+-		verbose_direct_sampling(dongle.dev, 1);}
++		verbose_direct_sampling(dongle.dev, dongle.direct_sampling);}
+ 	if (dongle.offset_tuning) {
+ 		verbose_offset_tuning(dongle.dev);}
+ 
+@@ -926,8 +927,21 @@ void frequency_range(struct controller_state *s, char *arg)
+ 	int i;
+ 	start = arg;
+ 	stop = strchr(start, ':') + 1;
++	if (stop == (char *)1) { // no stop or step given
++		s->freqs[s->freq_len] = (uint32_t) atofs(start);
++		s->freq_len++;
++		return;
++	}
+ 	stop[-1] = '\0';
+ 	step = strchr(stop, ':') + 1;
++	if (step == (char *)1) { // no step given
++		s->freqs[s->freq_len] = (uint32_t) atofs(start);
++		s->freq_len++;
++		s->freqs[s->freq_len] = (uint32_t) atofs(stop);
++		s->freq_len++;
++		stop[-1] = ':';
++		return;
++	}
+ 	step[-1] = '\0';
+ 	for(i=(int)atofs(start); i<=(int)atofs(stop); i+=(int)atofs(step))
+ 	{
+@@ -1106,6 +1120,8 @@ int main(int argc, char **argv)
+ 				demod.deemph = 1;}
+ 			if (strcmp("direct",  optarg) == 0) {
+ 				dongle.direct_sampling = 1;}
++			if (strcmp("direct2", optarg) == 0) {
++				dongle.direct_sampling = 2;}
+ 			if (strcmp("offset",  optarg) == 0) {
+ 				dongle.offset_tuning = 1;}
+ 			break;
+diff --git a/src/rtl_power.c b/src/rtl_power.c
+index 625d818..6204de2 100644
+--- a/src/rtl_power.c
++++ b/src/rtl_power.c
+@@ -437,8 +437,16 @@ void frequency_range(char *arg, double crop)
+ 	/* hacky string parsing */
+ 	start = arg;
+ 	stop = strchr(start, ':') + 1;
++	if (stop == (char *)1) {
++		fprintf(stderr, "Bad frequency range specification: %s\n", arg);
++		exit(1);
++	}
+ 	stop[-1] = '\0';
+ 	step = strchr(stop, ':') + 1;
++	if (step == (char *)1) {
++		fprintf(stderr, "Bad frequency range specification: %s\n", arg);
++		exit(1);
++	}
+ 	step[-1] = '\0';
+ 	lower = (int)atofs(start);
+ 	upper = (int)atofs(stop);
+diff --git a/src/rtl_tcp.c b/src/rtl_tcp.c
+index da6057b..84f5591 100644
+--- a/src/rtl_tcp.c
++++ b/src/rtl_tcp.c
+@@ -30,10 +30,12 @@
+ #include <sys/types.h>
+ #include <sys/socket.h>
+ #include <sys/time.h>
++#include <netdb.h>
+ #include <netinet/in.h>
+ #include <fcntl.h>
+ #else
+ #include <winsock2.h>
++#include <ws2tcpip.h>
+ #include "getopt/getopt.h"
+ #endif
+ 
+@@ -54,6 +56,10 @@ typedef int socklen_t;
+ #define SOCKET_ERROR -1
+ #endif
+ 
++#define DEFAULT_PORT_STR "1234"
++#define DEFAULT_SAMPLE_RATE_HZ 2048000
++#define DEFAULT_MAX_NUM_BUFFERS 500
++
+ static SOCKET s;
+ 
+ static pthread_t tcp_worker_thread;
+@@ -81,23 +87,24 @@ static rtlsdr_dev_t *dev = NULL;
+ static int enable_biastee = 0;
+ static int global_numq = 0;
+ static struct llist *ll_buffers = 0;
+-static int llbuf_num = 500;
++static int llbuf_num = DEFAULT_MAX_NUM_BUFFERS;
+ 
+ static volatile int do_exit = 0;
+ 
++
+ void usage(void)
+ {
+-	printf("rtl_tcp, an I/Q spectrum server for RTL2832 based DVB-T receivers\n\n"
+-		"Usage:\t[-a listen address]\n"
+-		"\t[-p listen port (default: 1234)]\n"
+-		"\t[-f frequency to tune to [Hz]]\n"
+-		"\t[-g gain (default: 0 for auto)]\n"
+-		"\t[-s samplerate in Hz (default: 2048000 Hz)]\n"
+-		"\t[-b number of buffers (default: 15, set by library)]\n"
+-		"\t[-n max number of linked list buffers to keep (default: 500)]\n"
+-		"\t[-d device index (default: 0)]\n"
+-		"\t[-P ppm_error (default: 0)]\n"
+-		"\t[-T enable bias-T on GPIO PIN 0 (works for rtl-sdr.com v3 dongles)]\n");
++	printf("rtl_tcp, an I/Q spectrum server for RTL2832 based DVB-T receivers\n\n");
++	printf("Usage:\t[-a listen address]\n");
++	printf("\t[-p listen port (default: %s)]\n", DEFAULT_PORT_STR);
++	printf("\t[-f frequency to tune to [Hz]]\n");
++	printf("\t[-g gain (default: 0 for auto)]\n");
++	printf("\t[-s samplerate in Hz (default: %d Hz)]\n", DEFAULT_SAMPLE_RATE_HZ);
++	printf("\t[-b number of buffers (default: 15, set by library)]\n");
++	printf("\t[-n max number of linked list buffers to keep (default: %d)]\n", DEFAULT_MAX_NUM_BUFFERS);
++	printf("\t[-d device index (default: 0)]\n");
++	printf("\t[-P ppm_error (default: 0)]\n");
++	printf("\t[-T enable bias-T on GPIO PIN 0 (works for rtl-sdr.com v3 dongles)]\n");
+ 	exit(1);
+ }
+ 
+@@ -371,10 +378,18 @@ static void *command_worker(void *arg)
+ int main(int argc, char **argv)
+ {
+ 	int r, opt, i;
+-	char* addr = "127.0.0.1";
+-	int port = 1234;
+-	uint32_t frequency = 100000000, samp_rate = 2048000;
+-	struct sockaddr_in local, remote;
++	char *addr = "127.0.0.1";
++	const char *port = DEFAULT_PORT_STR;
++	uint32_t frequency = 100000000, samp_rate = DEFAULT_SAMPLE_RATE_HZ;
++	struct sockaddr_storage local, remote;
++	struct addrinfo *ai;
++	struct addrinfo *aiHead;
++	struct addrinfo  hints;
++	char hostinfo[NI_MAXHOST];
++	char portinfo[NI_MAXSERV];
++	char remhostinfo[NI_MAXHOST];
++	char remportinfo[NI_MAXSERV];
++	int aiErr;
+ 	uint32_t buf_num = 0;
+ 	int dev_index = 0;
+ 	int dev_given = 0;
+@@ -385,7 +400,7 @@ int main(int argc, char **argv)
+ 	void *status;
+ 	struct timeval tv = {1,0};
+ 	struct linger ling = {1,0};
+-	SOCKET listensocket;
++	SOCKET listensocket = 0;
+ 	socklen_t rlen;
+ 	fd_set readfds;
+ 	u_long blockmode = 1;
+@@ -413,10 +428,10 @@ int main(int argc, char **argv)
+ 			samp_rate = (uint32_t)atofs(optarg);
+ 			break;
+ 		case 'a':
+-			addr = optarg;
++		        addr = strdup(optarg);
+ 			break;
+ 		case 'p':
+-			port = atoi(optarg);
++		        port = strdup(optarg);
+ 			break;
+ 		case 'b':
+ 			buf_num = atoi(optarg);
+@@ -515,16 +530,42 @@ int main(int argc, char **argv)
+ 	pthread_cond_init(&cond, NULL);
+ 	pthread_cond_init(&exit_cond, NULL);
+ 
+-	memset(&local,0,sizeof(local));
+-	local.sin_family = AF_INET;
+-	local.sin_port = htons(port);
+-	local.sin_addr.s_addr = inet_addr(addr);
++	hints.ai_flags  = AI_PASSIVE; /* Server mode. */
++	hints.ai_family = PF_UNSPEC;  /* IPv4 or IPv6. */
++	hints.ai_socktype = SOCK_STREAM;
++	hints.ai_protocol = IPPROTO_TCP;
++
++	if ((aiErr = getaddrinfo(addr,
++				 port,
++				 &hints,
++				 &aiHead )) != 0)
++	{
++		fprintf(stderr, "local address %s ERROR - %s.\n",
++		        addr, gai_strerror(aiErr));
++		return(-1);
++	}
++	memcpy(&local, aiHead->ai_addr, aiHead->ai_addrlen);
++
++	for (ai = aiHead; ai != NULL; ai = ai->ai_next) {
++		aiErr = getnameinfo((struct sockaddr *)ai->ai_addr, ai->ai_addrlen,
++				    hostinfo, NI_MAXHOST,
++				    portinfo, NI_MAXSERV, NI_NUMERICSERV | NI_NUMERICHOST);
++		if (aiErr)
++			fprintf( stderr, "getnameinfo ERROR - %s.\n",hostinfo);
++
++		listensocket = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
++		if (listensocket < 0)
++			continue;
+ 
+-	listensocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+-	r = 1;
+-	setsockopt(listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&r, sizeof(int));
+-	setsockopt(listensocket, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
+-	bind(listensocket,(struct sockaddr *)&local,sizeof(local));
++		r = 1;
++		setsockopt(listensocket, SOL_SOCKET, SO_REUSEADDR, (char *)&r, sizeof(int));
++		setsockopt(listensocket, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
++
++		if (bind(listensocket, (struct sockaddr *)&local, sizeof(local)))
++			fprintf(stderr, "rtl_tcp bind error: %s", strerror(errno));
++		else
++			break;
++	}
+ 
+ #ifdef _WIN32
+ 	ioctlsocket(listensocket, FIONBIO, &blockmode);
+@@ -535,11 +576,11 @@ int main(int argc, char **argv)
+ 
+ 	while(1) {
+ 		printf("listening...\n");
+-		printf("Use the device argument 'rtl_tcp=%s:%d' in OsmoSDR "
++		printf("Use the device argument 'rtl_tcp=%s:%s' in OsmoSDR "
+ 		       "(gr-osmosdr) source\n"
+ 		       "to receive samples in GRC and control "
+ 		       "rtl_tcp parameters (frequency, gain, ...).\n",
+-		       addr, port);
++		       hostinfo, portinfo);
+ 		listen(listensocket,1);
+ 
+ 		while(1) {
+@@ -559,7 +600,10 @@ int main(int argc, char **argv)
+ 
+ 		setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
+ 
+-		printf("client accepted!\n");
++		getnameinfo((struct sockaddr *)&remote, rlen,
++			    remhostinfo, NI_MAXHOST,
++			    remportinfo, NI_MAXSERV, NI_NUMERICSERV);
++		printf("client accepted! %s %s\n", remhostinfo, remportinfo);
+ 
+ 		memset(&dongle_info, 0, sizeof(dongle_info));
+ 		memcpy(&dongle_info.magic, "RTL0", 4);
+diff --git a/src/rtlsdr.rc.in b/src/rtlsdr.rc.in
+index bf603c3..0861ecb 100644
+--- a/src/rtlsdr.rc.in
++++ b/src/rtlsdr.rc.in
+@@ -1,5 +1,5 @@
+ 
+-#include <afxres.h>
++#include <windows.h>
+ 
+ VS_VERSION_INFO VERSIONINFO
+   FILEVERSION 0,0,0,0
+diff --git a/src/tuner_fc0013.c b/src/tuner_fc0013.c
+index 78b696e..5984dfb 100644
+--- a/src/tuner_fc0013.c
++++ b/src/tuner_fc0013.c
+@@ -248,11 +248,11 @@ int fc0013_set_params(void *dev, uint32_t freq, uint32_t bandwidth)
+ 		if (ret)
+ 			goto exit;
+ 
+-		/* disable UHF & enable GPS */
++		/* enable UHF & disable GPS */
+ 		ret = fc0013_readreg(dev, 0x14, &tmp);
+ 		if (ret)
+ 			goto exit;
+-		ret = fc0013_writereg(dev, 0x14, (tmp & 0x1f) | 0x20);
++		ret = fc0013_writereg(dev, 0x14, (tmp & 0x1f) | 0x40);
+ 		if (ret)
+ 			goto exit;
+ 	}
+diff --git a/src/tuner_r82xx.c b/src/tuner_r82xx.c
+index fe52bd9..997abd7 100644
+--- a/src/tuner_r82xx.c
++++ b/src/tuner_r82xx.c
+@@ -330,8 +330,14 @@ static int r82xx_read(struct r82xx_priv *priv, uint8_t reg, uint8_t *val, int le
+ 	priv->buf[0] = reg;
+ 
+ 	rc = rtlsdr_i2c_write_fn(priv->rtl_dev, priv->cfg->i2c_addr, priv->buf, 1);
+-	if (rc < 1)
+-		return rc;
++
++	if (rc != 1) {
++		fprintf(stderr, "%s: i2c wr failed=%d reg=%02x len=%d\n",
++			   __FUNCTION__, rc, reg, 1);
++		if (rc < 0)
++			return rc;
++		return -1;
++	}
+ 
+ 	rc = rtlsdr_i2c_read_fn(priv->rtl_dev, priv->cfg->i2c_addr, p, len);
+ 
+-- 
+2.34.1
+
