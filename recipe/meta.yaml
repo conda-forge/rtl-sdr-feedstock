@@ -10,15 +10,18 @@ source:
   sha256: ee10a76fe0c6601102367d4cdf5c26271e9442d0491aa8df27e5a9bf639cff7c
   patches:
     - 0001-Add-commits-since-0.6.0-through-2023-08-21.patch
-    - 0002-add-offset-tuning-bias-tee-hack.patch
-    - 0003-count-live-transfers-before-close.patch
-    - 0004-add-libusb-lib-directories-in-cmake-for-macos.patch
-    - 0005-call-interrupt_event_handler-in-cancel_async.patch
-    - 0006-open-with-file-descriptor.patch
-    - 0007-Set-version-for-conda-forge.patch
+    - 0002-count-live-transfers-before-close.patch
+    - 0003-add-libusb-lib-directories-in-cmake-for-macos.patch
+    - 0004-call-interrupt_event_handler-in-cancel_async.patch
+    - 0005-open-with-file-descriptor.patch
+    - 0006-l-band-lock-optimizations.patch
+    - 0007-Add-rtl-sdr-blog-features.patch
+    - 0008-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
+    - 0009-fix-rtl_tcp-on-macos.patch
+    - 0010-Set-version-for-conda-forge.patch
 
 build:
-  number: 0
+  number: 1
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
 

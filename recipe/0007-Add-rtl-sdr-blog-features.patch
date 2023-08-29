@@ -1,0 +1,411 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rtlsdrblog <rtlsdrblog@gmail.com>
+Date: Fri, 18 Aug 2023 21:21:41 +1200
+Subject: [PATCH] Add rtl-sdr-blog features:
+
+1) Add offset tuning bias tee hack
+
+2) Add force bias tee via EEPROM
+
+3) Add -D direct sampling flag to rtl_tcp
+
+4) Add direct sampling to rtl_sdr
+
+5) Add auto enable direct sampling when tuned below 24 MHz
+---
+ include/rtl-sdr.h |  8 +++++++
+ src/librtlsdr.c   | 53 ++++++++++++++++++++++++++++++++++++++++++++++-
+ src/rtl_eeprom.c  | 35 ++++++++++++++++---------------
+ src/rtl_sdr.c     | 12 ++++++++++-
+ src/rtl_tcp.c     | 11 +++++++++-
+ 5 files changed, 99 insertions(+), 20 deletions(-)
+
+diff --git a/include/rtl-sdr.h b/include/rtl-sdr.h
+index 4b7660e..a1ff1bd 100644
+--- a/include/rtl-sdr.h
++++ b/include/rtl-sdr.h
+@@ -29,6 +29,13 @@ extern "C" {
+ 
+ typedef struct rtlsdr_dev rtlsdr_dev_t;
+ 
++enum rtlsdr_ds_mode {
++	RTLSDR_DS_IQ = 0,	/* I/Q quadrature sampling of tuner output */
++	RTLSDR_DS_I,		/* 1: direct sampling on I branch: usually not connected */
++	RTLSDR_DS_Q,		/* 2: direct sampling on Q branch: HF on rtl-sdr v3 dongle */
++};
++
++
+ RTLSDR_API uint32_t rtlsdr_get_device_count(void);
+ 
+ RTLSDR_API const char* rtlsdr_get_device_name(uint32_t index);
+@@ -304,6 +311,7 @@ RTLSDR_API int rtlsdr_set_agc_mode(rtlsdr_dev_t *dev, int on);
+  * \param on 0 means disabled, 1 I-ADC input enabled, 2 Q-ADC input enabled
+  * \return 0 on success
+  */
++int _rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on);
+ RTLSDR_API int rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on);
+ 
+ /*!
+diff --git a/src/librtlsdr.c b/src/librtlsdr.c
+index 228b6dc..24480af 100644
+--- a/src/librtlsdr.c
++++ b/src/librtlsdr.c
+@@ -122,6 +122,8 @@ struct rtlsdr_dev {
+ 	char manufact[256];
+ 	char product[256];
+ 	int live_transfers;
++	int force_bt;
++	enum rtlsdr_ds_mode direct_sampling_mode;
+ };
+ 
+ void rtlsdr_set_gpio_bit(rtlsdr_dev_t *dev, uint8_t gpio, int val);
+@@ -365,6 +367,7 @@ static rtlsdr_dongle_t known_devices[] = {
+ #define BULK_TIMEOUT	0
+ 
+ #define EEPROM_ADDR	0xa0
++#define EEPROM_SIZE     256
+ 
+ enum usb_reg {
+ 	USB_SYSCTL		= 0x2000,
+@@ -885,10 +888,23 @@ int rtlsdr_read_eeprom(rtlsdr_dev_t *dev, uint8_t *data, uint8_t offset, uint16_
+ int rtlsdr_set_center_freq(rtlsdr_dev_t *dev, uint32_t freq)
+ {
+ 	int r = -1;
++	int last_ds;
+ 
+ 	if (!dev || !dev->tuner)
+ 		return -1;
+ 
++	/* Get the last direct sampling status */
++	last_ds = rtlsdr_get_direct_sampling(dev);
++	if (last_ds < 0)
++		return 1;
++
++	/* Check if direct sampling should be enabled.
++	* Also only enable auto switch if ds mode is 0 (aka None, or standard mode)
++	*/
++	if(dev->direct_sampling_mode == 0) {
++		dev->direct_sampling = (freq < 24000000 && dev->tuner_type == RTLSDR_TUNER_R820T) ? 2 : 0;
++	}
++
+ 	if (dev->direct_sampling) {
+ 		r = rtlsdr_set_if_freq(dev, freq);
+ 	} else if (dev->tuner && dev->tuner->set_freq) {
+@@ -902,6 +918,13 @@ int rtlsdr_set_center_freq(rtlsdr_dev_t *dev, uint32_t freq)
+ 	else
+ 		dev->freq = 0;
+ 
++	/* Have to run this after dev->freq is updated to avoid setting
++	* the previous frequency back again
++	*/
++	if (last_ds != dev->direct_sampling) {
++		return _rtlsdr_set_direct_sampling(dev, dev->direct_sampling);
++	}
++
+ 	return r;
+ }
+ 
+@@ -1163,7 +1186,15 @@ int rtlsdr_set_agc_mode(rtlsdr_dev_t *dev, int on)
+ 	return rtlsdr_demod_write_reg(dev, 0, 0x19, on ? 0x25 : 0x05, 1);
+ }
+ 
++
+ int rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on)
++{
++	/* When the UI sets the ds mode, remember the mode set */
++	dev->direct_sampling_mode = (enum rtlsdr_ds_mode)on;
++	return _rtlsdr_set_direct_sampling(dev, on);
++}
++
++int _rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on)
+ {
+ 	int r = 0;
+ 
+@@ -1242,9 +1273,14 @@ int rtlsdr_set_offset_tuning(rtlsdr_dev_t *dev, int on)
+ 	if (!dev)
+ 		return -1;
+ 
++	/* RTL-SDR-BLOG Hack, enables us to turn on the bias tee by clicking on "offset tuning" in software that doesn't have specified bias tee support.
++	* Offset tuning is not used for R820T/R828D devices so it is no problem.
++	*/
+ 	if ((dev->tuner_type == RTLSDR_TUNER_R820T) ||
+-	    (dev->tuner_type == RTLSDR_TUNER_R828D))
++	    (dev->tuner_type == RTLSDR_TUNER_R828D)) {
++		rtlsdr_set_bias_tee(dev, on);
+ 		return -2;
++	}
+ 
+ 	if (dev->direct_sampling)
+ 		return -3;
+@@ -1454,6 +1490,7 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
+ 	struct libusb_device_descriptor dd;
+ 	uint8_t reg;
+ 	ssize_t cnt;
++	uint8_t buf[EEPROM_SIZE];
+ 
+ 	dev = malloc(sizeof(rtlsdr_dev_t));
+ 	if (NULL == dev)
+@@ -1635,6 +1672,14 @@ found:
+ 		break;
+ 	}
+ 
++	/* Hack to force the Bias T to always be on if we set the IR-Endpoint
++	* bit in the EEPROM to 0. Default on EEPROM is 1.
++	*/
++	r = rtlsdr_read_eeprom(dev, buf, 0, EEPROM_SIZE);
++	dev->force_bt = (buf[7] & 0x02) ? 0 : 1;
++	if(dev->force_bt)
++		rtlsdr_set_bias_tee(dev, 1);
++
+ 	if (dev->tuner->init)
+ 		r = dev->tuner->init(dev);
+ 
+@@ -2199,6 +2244,12 @@ int rtlsdr_set_bias_tee_gpio(rtlsdr_dev_t *dev, int gpio, int on)
+ 	if (!dev)
+ 		return -1;
+ 
++	/* If it's the bias tee GPIO, and force bias tee is on
++	* don't allow the bias tee to turn off. Prevents software
++	* that initializes with the bias tee off from turning it off */
++	if(gpio == 0 && dev->force_bt)
++		on = 1;
++
+ 	rtlsdr_set_gpio_output(dev, gpio);
+ 	rtlsdr_set_gpio_bit(dev, gpio, on);
+ 
+diff --git a/src/rtl_eeprom.c b/src/rtl_eeprom.c
+index 24be900..d7a840c 100644
+--- a/src/rtl_eeprom.c
++++ b/src/rtl_eeprom.c
+@@ -43,7 +43,7 @@ typedef struct rtlsdr_config {
+ 	char product[MAX_STR_SIZE];
+ 	char serial[MAX_STR_SIZE];
+ 	int have_serial;
+-	int enable_ir;
++	int enable_bt;
+ 	int remote_wakeup;
+ } rtlsdr_config_t;
+ 
+@@ -57,8 +57,8 @@ void dump_config(rtlsdr_config_t *conf)
+ 	fprintf(stderr, "Serial number:\t\t%s\n", conf->serial);
+ 	fprintf(stderr, "Serial number enabled:\t");
+ 	fprintf(stderr, conf->have_serial ? "yes\n": "no\n");
+-	fprintf(stderr, "IR endpoint enabled:\t");
+-	fprintf(stderr, conf->enable_ir ? "yes\n": "no\n");
++	fprintf(stderr, "Bias Tee always on:\t");
++	fprintf(stderr, conf->enable_bt ? "no\n": "yes\n"); // 0 is ON for enable_bt
+ 	fprintf(stderr, "Remote wakeup enabled:\t");
+ 	fprintf(stderr, conf->remote_wakeup ? "yes\n": "no\n");
+ 	fprintf(stderr, "__________________________________________\n");
+@@ -74,7 +74,7 @@ void usage(void)
+ 		"\t[-m <str> set manufacturer string]\n"
+ 		"\t[-p <str> set product string]\n"
+ 		"\t[-s <str> set serial number string]\n"
+-		"\t[-i <0,1> disable/enable IR-endpoint]\n"
++		"\t[-b <0,1> disable/enable force bias tee always on (0: OFF, 1: ON)]\n"
+ 		"\t[-g <conf> generate default config and write to device]\n"
+ 		"\t[   <conf> can be one of:]\n"
+ 		"\t[   realtek\t\tRealtek default (as without EEPROM)]\n"
+@@ -140,7 +140,7 @@ int parse_eeprom_to_conf(rtlsdr_config_t *conf, uint8_t *dat)
+ 	conf->product_id = dat[4] | (dat[5] << 8);
+ 	conf->have_serial = (dat[6] == 0xa5) ? 1 : 0;
+ 	conf->remote_wakeup = (dat[7] & 0x01) ? 1 : 0;
+-	conf->enable_ir = (dat[7] & 0x02) ? 1 : 0;
++	conf->enable_bt = (dat[7] & 0x02) ? 1 : 0;
+ 
+ 	pos = get_string_descriptor(STR_OFFSET, dat, conf->manufacturer);
+ 	pos = get_string_descriptor(pos, dat, conf->product);
+@@ -162,7 +162,7 @@ int gen_eeprom_from_conf(rtlsdr_config_t *conf, uint8_t *dat)
+ 	dat[6] = conf->have_serial ? 0xa5 : 0x00;
+ 	dat[7] = 0x14;
+ 	dat[7] |= conf->remote_wakeup ? 0x01 : 0x00;
+-	dat[7] |= conf->enable_ir ? 0x02 : 0x00;
++	dat[7] |= conf->enable_bt ? 0x02 : 0x00;
+ 	dat[8] = 0x02;
+ 
+ 	pos = set_string_descriptor(STR_OFFSET, dat, conf->manufacturer);
+@@ -194,7 +194,7 @@ void gen_default_conf(rtlsdr_config_t *conf, int config)
+ 		strcpy(conf->product, "RTL2832U DVB-T");
+ 		strcpy(conf->serial, "0");
+ 		conf->have_serial = 1;
+-		conf->enable_ir = 0;
++		conf->enable_bt = 0;
+ 		conf->remote_wakeup = 1;
+ 		break;
+ 	case REALTEK_EEPROM:
+@@ -205,7 +205,7 @@ void gen_default_conf(rtlsdr_config_t *conf, int config)
+ 		strcpy(conf->product, "RTL2838UHIDIR");
+ 		strcpy(conf->serial, "00000001");
+ 		conf->have_serial = 1;
+-		conf->enable_ir = 1;
++		conf->enable_bt = 1;
+ 		conf->remote_wakeup = 0;
+ 		break;
+ 	case TERRATEC_NOXON:
+@@ -216,7 +216,7 @@ void gen_default_conf(rtlsdr_config_t *conf, int config)
+ 		strcpy(conf->product, "DAB Stick");
+ 		strcpy(conf->serial, "0");
+ 		conf->have_serial = 1;
+-		conf->enable_ir = 0;
++		conf->enable_bt = 0;
+ 		conf->remote_wakeup = 1;
+ 		break;
+ 	case TERRATEC_T_BLACK:
+@@ -227,7 +227,7 @@ void gen_default_conf(rtlsdr_config_t *conf, int config)
+ 		strcpy(conf->product, "RTL2838UHIDIR");
+ 		strcpy(conf->serial, "00000001");
+ 		conf->have_serial = 1;
+-		conf->enable_ir = 1;
++		conf->enable_bt = 1;
+ 		conf->remote_wakeup = 0;
+ 		break;
+ 	case TERRATEC_T_PLUS:
+@@ -238,7 +238,7 @@ void gen_default_conf(rtlsdr_config_t *conf, int config)
+ 		strcpy(conf->product, "RTL2838UHIDIR");
+ 		strcpy(conf->serial, "00000001");
+ 		conf->have_serial = 1;
+-		conf->enable_ir = 1;
++		conf->enable_bt = 1;
+ 		conf->remote_wakeup = 0;
+ 		break;
+ 	default:
+@@ -261,10 +261,10 @@ int main(int argc, char **argv)
+ 	int flash_file = 0;
+ 	int default_config = 0;
+ 	int change = 0;
+-	int ir_endpoint = 0;
++	int enable_bt = 0;
+ 	char ch;
+ 
+-	while ((opt = getopt(argc, argv, "d:m:p:s:i:g:w:r:h?")) != -1) {
++	while ((opt = getopt(argc, argv, "d:m:p:s:b:g:w:r:h?")) != -1) {
+ 		switch (opt) {
+ 		case 'd':
+ 			dev_index = atoi(optarg);
+@@ -281,8 +281,9 @@ int main(int argc, char **argv)
+ 			serial_str = optarg;
+ 			change = 1;
+ 			break;
+-		case 'i':
+-			ir_endpoint = (atoi(optarg) > 0) ? 1 : -1;
++		case 'b':
++			enable_bt = (atoi(optarg) > 0) ? -1 : 1;
++			//ir_endpoint = (atoi(optarg) > 0) ? 1 : -1;
+ 			change = 1;
+ 			break;
+ 		case 'g':
+@@ -380,8 +381,8 @@ int main(int argc, char **argv)
+ 		strncpy((char*)&conf.serial, serial_str, MAX_STR_SIZE - 1);
+ 	}
+ 
+-	if (ir_endpoint != 0)
+-		 conf.enable_ir = (ir_endpoint > 0) ? 1 : 0;
++	if (enable_bt != 0)
++		 conf.enable_bt = (enable_bt > 0) ? 1 : 0;
+ 
+ 	if (!change)
+ 		goto exit;
+diff --git a/src/rtl_sdr.c b/src/rtl_sdr.c
+index 2c93b57..ccd6d76 100644
+--- a/src/rtl_sdr.c
++++ b/src/rtl_sdr.c
+@@ -55,6 +55,7 @@ void usage(void)
+ 		"\t[-b output_block_size (default: 16 * 16384)]\n"
+ 		"\t[-n number of samples to read (default: 0, infinite)]\n"
+ 		"\t[-S force sync output (default: async)]\n"
++		"\t[-D enable direct sampling (default: off)]\n"
+ 		"\tfilename (a '-' dumps samples to stdout)\n\n");
+ 	exit(1);
+ }
+@@ -113,6 +114,7 @@ int main(int argc, char **argv)
+ 	int r, opt;
+ 	int gain = 0;
+ 	int ppm_error = 0;
++	int direct_sampling = 0;
+ 	int sync_mode = 0;
+ 	FILE *file;
+ 	uint8_t *buffer;
+@@ -122,7 +124,7 @@ int main(int argc, char **argv)
+ 	uint32_t samp_rate = DEFAULT_SAMPLE_RATE;
+ 	uint32_t out_block_size = DEFAULT_BUF_LENGTH;
+ 
+-	while ((opt = getopt(argc, argv, "d:f:g:s:b:n:p:S")) != -1) {
++	while ((opt = getopt(argc, argv, "d:f:g:s:b:n:p:SD")) != -1) {
+ 		switch (opt) {
+ 		case 'd':
+ 			dev_index = verbose_device_search(optarg);
+@@ -149,6 +151,9 @@ int main(int argc, char **argv)
+ 		case 'S':
+ 			sync_mode = 1;
+ 			break;
++		case 'D':
++			direct_sampling = 1;
++			break;
+ 		default:
+ 			usage();
+ 			break;
+@@ -198,6 +203,11 @@ int main(int argc, char **argv)
+ #else
+ 	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
+ #endif
++
++	/* Set direct sampling */
++        if (direct_sampling)
++                verbose_direct_sampling(dev, 2);
++
+ 	/* Set the sample rate */
+ 	verbose_set_sample_rate(dev, samp_rate);
+ 
+diff --git a/src/rtl_tcp.c b/src/rtl_tcp.c
+index 8781ba9..588ca97 100644
+--- a/src/rtl_tcp.c
++++ b/src/rtl_tcp.c
+@@ -105,6 +105,7 @@ void usage(void)
+ 	printf("\t[-d device index (default: 0)]\n");
+ 	printf("\t[-P ppm_error (default: 0)]\n");
+ 	printf("\t[-T enable bias-T on GPIO PIN 0 (works for rtl-sdr.com v3 dongles)]\n");
++	printf("\t[-D enable direct sampling (default: off)]\n");
+ 	exit(1);
+ }
+ 
+@@ -396,6 +397,7 @@ int main(int argc, char **argv)
+ 	int dev_given = 0;
+ 	int gain = 0;
+ 	int ppm_error = 0;
++	int direct_sampling = 0;
+ 	struct llist *curelem,*prev;
+ 	pthread_attr_t attr;
+ 	void *status;
+@@ -413,7 +415,7 @@ int main(int argc, char **argv)
+ 	struct sigaction sigact, sigign;
+ #endif
+ 
+-	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:T")) != -1) {
++	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:TD")) != -1) {
+ 		switch (opt) {
+ 		case 'd':
+ 			dev_index = verbose_device_search(optarg);
+@@ -446,6 +448,9 @@ int main(int argc, char **argv)
+ 		case 'T':
+ 			enable_biastee = 1;
+ 			break;
++		case 'D':
++			direct_sampling = 1;
++			break;
+ 		default:
+ 			usage();
+ 			break;
+@@ -482,6 +487,10 @@ int main(int argc, char **argv)
+ 	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
+ #endif
+ 
++	/* Set direct sampling */
++        if (direct_sampling)
++                verbose_direct_sampling(dev, 2);
++
+ 	/* Set the tuner error */
+ 	verbose_ppm_set(dev, ppm_error);
+ 
+-- 
+2.40.0
+
