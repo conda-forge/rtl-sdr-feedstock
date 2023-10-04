@@ -10,10 +10,19 @@ cmake_config_args=(
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_LIBDIR=lib
     -DCMAKE_INSTALL_PREFIX=$PREFIX
-    -DDETACH_KERNEL_DRIVER=OFF
-    -DENABLE_ZEROCOPY=OFF
+    -DDETACH_KERNEL_DRIVER=ON
     -DINSTALL_UDEV_RULES=OFF
 )
+
+if [[ $target_platform == linux-64 || $target_platform == linux-ppc64le ]] ; then
+    cmake_config_args+=(
+        -DENABLE_ZEROCOPY=ON
+    )
+else
+    cmake_config_args+=(
+        -DENABLE_ZEROCOPY=OFF
+    )
+fi
 
 cmake ${CMAKE_ARGS} .. "${cmake_config_args[@]}"
 cmake --build . --config Release -- -j${CPU_COUNT}
