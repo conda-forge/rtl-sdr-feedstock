@@ -3,7 +3,7 @@
 
 package:
   name: {{ name|lower }}
-  version: {{ version }}.post20230829
+  version: {{ version }}.post20231004
 
 source:
   url: https://github.com/osmocom/{{ name }}/archive/{{ version }}.tar.gz
@@ -18,10 +18,11 @@ source:
     - 0007-Add-rtl-sdr-blog-features.patch
     - 0008-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
     - 0009-fix-rtl_tcp-on-macos.patch
-    - 0010-Set-version-for-conda-forge.patch
+    - 0010-fix-rtl_tcp-error-on-windows-when-hints-not-initiali.patch
+    - 0011-Set-version-for-conda-forge.patch
 
 build:
-  number: 2
+  number: 0
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
 
