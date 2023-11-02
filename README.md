@@ -9,7 +9,7 @@ Package license: GPL-2.0-or-later AND LGPL-2.1-or-later
 
 Summary: Library for using an Realtek RTL2832-based DVB dongle as an SDR receiver
 
-Development: https://osmocom.org/projects/rtl-sdr/repository
+Development: https://gitea.osmocom.org/sdr/rtl-sdr
 
 Documentation: https://osmocom.org/projects/rtl-sdr/wiki
 
