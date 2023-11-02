@@ -21,6 +21,8 @@ build:
   number: 0
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
+  # instructions for manually linking udev rules
+  post-link: post-link  # [linux]
 
 requirements:
   build:
