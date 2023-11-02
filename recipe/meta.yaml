@@ -3,23 +3,19 @@
 
 package:
   name: {{ name|lower }}
-  version: {{ version }}.post20231004
+  version: {{ version }}
 
 source:
   url: https://github.com/osmocom/{{ name }}/archive/v{{ version }}.tar.gz
   sha256: eadc993877fd4278763b475890b8cd18bc59d8edee7f59fd045863d5c459ea25
   patches:
-    - 0001-Add-commits-since-0.6.0-through-2023-08-21.patch
-    - 0002-count-live-transfers-before-close.patch
-    - 0003-add-libusb-lib-directories-in-cmake-for-macos.patch
-    - 0004-call-interrupt_event_handler-in-cancel_async.patch
-    - 0005-open-with-file-descriptor.patch
-    - 0006-l-band-lock-optimizations.patch
-    - 0007-Add-rtl-sdr-blog-features.patch
-    - 0008-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
-    - 0009-fix-rtl_tcp-on-macos.patch
-    - 0010-fix-rtl_tcp-error-on-windows-when-hints-not-initiali.patch
-    - 0011-Set-version-for-conda-forge.patch
+    - 0001-count-live-transfers-before-close.patch
+    - 0002-add-libusb-lib-directories-in-cmake-for-macos.patch
+    - 0003-call-interrupt_event_handler-in-cancel_async.patch
+    - 0004-open-with-file-descriptor.patch
+    - 0005-l-band-lock-optimizations.patch
+    - 0006-Add-rtl-sdr-blog-features.patch
+    - 0007-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
 
 build:
   number: 0
@@ -30,16 +26,11 @@ requirements:
   build:
     - {{ compiler('c') }}
     - cmake
-    # libudev CDT needed to link against libusb through uhd on linux CentOS 6
-    # libusb uses the conda-forge libudev package for CentOS 7
-    - {{ cdt('libudev-devel') }}  # [linux and cdt_name=='cos6']
     - make  # [not win]
     - ninja  # [win]
     - pkg-config
   host:
     - libusb
-    # restrict to cos6-compatible libusb (and libudev)
-    - libusb-cos6  # [linux and cdt_name=='cos6']
     - pthreads-win32  # [win]
   run:
     - pthreads-win32  # [win]
@@ -80,7 +71,7 @@ about:
     for DAB/DAB+/FM demodulation. The possibility of this has been discovered by Eric
     Fry (http://rtlsdr.org/#history_and_discovery_of_rtlsdr).
   doc_url: https://osmocom.org/projects/rtl-sdr/wiki
-  dev_url: https://osmocom.org/projects/rtl-sdr/repository
+  dev_url: https://gitea.osmocom.org/sdr/rtl-sdr
 
 extra:
   recipe-maintainers:
