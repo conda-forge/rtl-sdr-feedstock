@@ -13,10 +13,18 @@ Development: https://gitea.osmocom.org/sdr/rtl-sdr
 
 Documentation: https://osmocom.org/projects/rtl-sdr/wiki
 
-DVB-T dongles based on the Realtek RTL2832U can be used as a cheap SDR, since the
-chip allows transferring the raw I/Q samples to the host, which is officially used
-for DAB/DAB+/FM demodulation. The possibility of this has been discovered by Eric
-Fry (http://rtlsdr.org/#history_and_discovery_of_rtlsdr).
+DVB-T dongles based on the Realtek RTL2832U can be used as a cheap SDR, since the chip allows transferring the raw I/Q samples to the host, which is officially used for DAB/DAB+/FM demodulation. The possibility of this has been discovered by Eric Fry (http://rtlsdr.org/#history_and_discovery_of_rtlsdr).
+For Linux users of `rtl-sdr`, you will likely want to link the provided udev rule into your system installation in order for the hardware to have the correct permissions:
+
+    sudo ln -s $CONDA_PREFIX/lib/udev/rules.d/rtl-sdr.rules /etc/udev/rules.d/
+    sudo udevadm control --reload
+    sudo udevadm trigger
+
+You may have to restart for this change to take effect.
+Even though the Linux kernel's built-in DVB-T module that would normally claim the device should be unloaded automatically, you might also want to blacklist the DVB-T module by running:
+
+    sudo ln -s $CONDA_PREFIX/etc/modprobe.d/rtl-sdr-blacklist.conf /etc/modprobe.d/
+    sudo modprobe -r $(cat $CONDA_PREFIX/etc/modprobe.d/rtl-sdr-blacklist.conf | sed -n -e 's/^blacklist //p')
 
 
 Current build status
