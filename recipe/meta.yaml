@@ -1,5 +1,5 @@
 {% set name = "rtl-sdr" %}
-{% set version = "2.0.1" %}
+{% set version = "2.0.2" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/osmocom/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: ee9b76568cde94674816e99f918b01718f9dd88a1804a3227808c0ef744fbc18
+  sha256: d69943eb32df742bc38a00ce6615e41250fd57851174e5ff916ec31e9e9e68e9
   patches:
     - 0001-count-live-transfers-before-close.patch
     - 0002-add-libusb-lib-directories-in-cmake-for-macos.patch
@@ -27,6 +27,7 @@ build:
 requirements:
   build:
     - {{ compiler('c') }}
+    - {{ stdlib("c") }}
     - cmake
     - make  # [not win]
     - ninja  # [win]
