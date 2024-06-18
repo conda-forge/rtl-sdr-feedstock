@@ -28,6 +28,9 @@ cmake ${CMAKE_ARGS} .. "${cmake_config_args[@]}"
 cmake --build . --config Release -- -j${CPU_COUNT}
 cmake --build . --config Release --target install
 
+# make link at librtlsdr.so.2 soname which 2.0.0 and 2.0.1 provided
+cmake -E create_symlink $PREFIX/lib/librtlsdr.so.0 $PREFIX/lib/librtlsdr.so.2
+
 # delete static library per conda-forge policy
 rm $PREFIX/lib/librtlsdr.a
 
