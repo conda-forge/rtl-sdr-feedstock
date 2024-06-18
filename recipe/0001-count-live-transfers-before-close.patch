@@ -155,5 +155,5 @@ index ee13556..38d36a3 100644
  
  int rtlsdr_cancel_async(rtlsdr_dev_t *dev)
 -- 
-2.40.0
+2.45.1
 
