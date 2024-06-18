@@ -8,7 +8,7 @@ Subject: [PATCH] add libusb lib directories in cmake for macos
  1 file changed, 1 insertion(+)
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 7b47309..3b8060b 100644
+index a2bcb3d..9c921d2 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -21,6 +21,7 @@
@@ -20,5 +20,5 @@ index 7b47309..3b8060b 100644
    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
    $<INSTALL_INTERFACE:include>  # <prefix>/include
 -- 
-2.40.0
+2.45.1
 
