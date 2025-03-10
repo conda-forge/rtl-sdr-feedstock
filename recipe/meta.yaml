@@ -34,9 +34,7 @@ requirements:
     - pkg-config
   host:
     - libusb
-    - pthreads-win32  # [win]
-  run:
-    - pthreads-win32  # [win]
+    - winpthreads-devel  # [win]
 
 test:
   commands:
