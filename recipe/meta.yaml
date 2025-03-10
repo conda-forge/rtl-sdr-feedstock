@@ -6,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://gitea.osmocom.org/sdr/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: f7c770020945c603595502f292f66b4159c86b2de6fdca35eed31f22b188ddf0
+  url: https://github.com/osmocom/{{ name }}/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: d69943eb32df742bc38a00ce6615e41250fd57851174e5ff916ec31e9e9e68e9
   patches:
     - 0001-count-live-transfers-before-close.patch
     - 0002-add-libusb-lib-directories-in-cmake-for-macos.patch
@@ -18,7 +18,7 @@ source:
     - 0007-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
 
 build:
-  number: 0
+  number: 1
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
   # instructions for manually linking udev rules
@@ -34,9 +34,7 @@ requirements:
     - pkg-config
   host:
     - libusb
-    - pthreads-win32  # [win]
-  run:
-    - pthreads-win32  # [win]
+    - winpthreads-devel  # [win]
 
 test:
   commands:
@@ -44,12 +42,23 @@ test:
     - setlocal EnableDelayedExpansion  # [win]
 
     # verify that executables get installed
-    {% set cmds = ["rtl_adsb", "rtl_biast", "rtl_eeprom", "rtl_fm", "rtl_power"] %}
-    {% set cmds = cmds + ["rtl_sdr", "rtl_tcp", "rtl_test"] %}
-    {% for cmd in cmds %}
-    - {{ cmd }} -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
-    - {{ cmd }} -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
-    {% endfor %}
+    - rtl_adsb -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_biast -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_eeprom -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_fm -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_power -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_sdr -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_tcp -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_test -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+
+    - rtl_adsb -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_biast -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_eeprom -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_fm -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_power -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_sdr -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_tcp -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_test -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
 
     # verify that headers get installed
     - test -f $PREFIX/include/rtl-sdr.h  # [not win]
