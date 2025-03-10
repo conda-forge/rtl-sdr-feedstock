@@ -6,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://gitea.osmocom.org/sdr/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: f7c770020945c603595502f292f66b4159c86b2de6fdca35eed31f22b188ddf0
+  url: https://github.com/osmocom/{{ name }}/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: d69943eb32df742bc38a00ce6615e41250fd57851174e5ff916ec31e9e9e68e9
   patches:
     - 0001-count-live-transfers-before-close.patch
     - 0002-add-libusb-lib-directories-in-cmake-for-macos.patch
