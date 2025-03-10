@@ -18,7 +18,7 @@ source:
     - 0007-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
 
 build:
-  number: 0
+  number: 1
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
   # instructions for manually linking udev rules
