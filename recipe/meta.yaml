@@ -42,12 +42,23 @@ test:
     - setlocal EnableDelayedExpansion  # [win]
 
     # verify that executables get installed
-    {% set cmds = ["rtl_adsb", "rtl_biast", "rtl_eeprom", "rtl_fm", "rtl_power"] %}
-    {% set cmds = cmds + ["rtl_sdr", "rtl_tcp", "rtl_test"] %}
-    {% for cmd in cmds %}
-    - {{ cmd }} -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
-    - {{ cmd }} -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
-    {% endfor %}
+    - rtl_adsb -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_biast -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_eeprom -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_fm -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_power -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_sdr -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_tcp -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+    - rtl_test -h || ec=$?; if [ $ec -gt 1 ]; then exit $ec; fi  # [not win]
+
+    - rtl_adsb -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_biast -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_eeprom -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_fm -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_power -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_sdr -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_tcp -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
+    - rtl_test -h || if !ERRORLEVEL! LEQ 1 cmd /c "exit /b 0"  # [win]
 
     # verify that headers get installed
     - test -f $PREFIX/include/rtl-sdr.h  # [not win]
