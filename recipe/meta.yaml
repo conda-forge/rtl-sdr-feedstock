@@ -9,16 +9,14 @@ source:
   url: https://github.com/osmocom/{{ name }}/archive/refs/tags/v{{ version }}.tar.gz
   sha256: d69943eb32df742bc38a00ce6615e41250fd57851174e5ff916ec31e9e9e68e9
   patches:
-    - 0001-count-live-transfers-before-close.patch
-    - 0002-add-libusb-lib-directories-in-cmake-for-macos.patch
-    - 0003-call-interrupt_event_handler-in-cancel_async.patch
-    - 0004-open-with-file-descriptor.patch
-    - 0005-l-band-lock-optimizations.patch
-    - 0006-Add-rtl-sdr-blog-features.patch
-    - 0007-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
+    - 0001-add-libusb-lib-directories-in-cmake-for-macos.patch
+    - 0002-open-with-file-descriptor.patch
+    - 0003-l-band-lock-optimizations.patch
+    - 0004-Add-rtl-sdr-blog-features.patch
+    - 0005-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
 
 build:
-  number: 1
+  number: 2
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
   # instructions for manually linking udev rules
