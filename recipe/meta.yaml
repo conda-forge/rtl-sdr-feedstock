@@ -14,9 +14,11 @@ source:
     - 0003-l-band-lock-optimizations.patch
     - 0004-Add-rtl-sdr-blog-features.patch
     - 0005-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
+    - 0006-Handle-USB-bulk-transfer-timeouts.patch
+    - 0007-Wait-until-all-transfers-are-cancelled.patch
 
 build:
-  number: 2
+  number: 3
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
   # instructions for manually linking udev rules
