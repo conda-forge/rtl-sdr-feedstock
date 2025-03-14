@@ -8,14 +8,14 @@ Subject: [PATCH] Debug
  1 file changed, 3 insertions(+)
 
 diff --git a/src/librtlsdr.c b/src/librtlsdr.c
-index 1fecc4e..e9e1bb3 100644
+index 1fecc4e..03813ef 100644
 --- a/src/librtlsdr.c
 +++ b/src/librtlsdr.c
 @@ -2160,6 +2160,7 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
  		}
  
  		if (RTLSDR_CANCELING == dev->async_status) {
-+			fprintf(stderr, "enter canceling if\n");
++			printf("enter canceling if\n");
  			next_status = RTLSDR_INACTIVE;
  
  			if (!dev->xfer)
@@ -23,7 +23,7 @@ index 1fecc4e..e9e1bb3 100644
  				if (LIBUSB_TRANSFER_CANCELLED !=
  						dev->xfer[i]->status) {
  					r = libusb_cancel_transfer(dev->xfer[i]);
-+					fprintf(stderr, "canceling transfer %i, returned %d\n", i, r);
++					printf("canceling transfer %i, returned %d\n", i, r);
  					/* handle events after canceling
  					 * to allow transfer status to
  					 * propagate */
@@ -31,7 +31,7 @@ index 1fecc4e..e9e1bb3 100644
  						continue;
  					}
  
-+					fprintf(stderr, "resetting next_status to canceling, r=%d\n", r);
++					printf("resetting next_status to canceling, r=%d\n", r);
  					next_status = RTLSDR_CANCELING;
  				}
  			}
