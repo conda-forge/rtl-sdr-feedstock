@@ -16,6 +16,7 @@ source:
     - 0005-follow-keenerd-and-don-t-stop-the-i2c-repeater-on-tu.patch
     - 0006-Handle-USB-bulk-transfer-timeouts.patch
     - 0007-Ignore-transfer-error-when-not-in-progress-already-c.patch
+    - 0008-Debug.patch
 
 build:
   number: 3

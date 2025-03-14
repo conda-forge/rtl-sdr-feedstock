@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Volz <ryan.volz@gmail.com>
+Date: Fri, 14 Mar 2025 11:46:15 -0400
+Subject: [PATCH] Debug
+
+---
+ src/librtlsdr.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/librtlsdr.c b/src/librtlsdr.c
+index 1fecc4e..e9e1bb3 100644
+--- a/src/librtlsdr.c
++++ b/src/librtlsdr.c
+@@ -2160,6 +2160,7 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
+ 		}
+ 
+ 		if (RTLSDR_CANCELING == dev->async_status) {
++			fprintf(stderr, "enter canceling if\n");
+ 			next_status = RTLSDR_INACTIVE;
+ 
+ 			if (!dev->xfer)
+@@ -2172,6 +2173,7 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
+ 				if (LIBUSB_TRANSFER_CANCELLED !=
+ 						dev->xfer[i]->status) {
+ 					r = libusb_cancel_transfer(dev->xfer[i]);
++					fprintf(stderr, "canceling transfer %i, returned %d\n", i, r);
+ 					/* handle events after canceling
+ 					 * to allow transfer status to
+ 					 * propagate */
+@@ -2189,6 +2191,7 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
+ 						continue;
+ 					}
+ 
++					fprintf(stderr, "resetting next_status to canceling, r=%d\n", r);
+ 					next_status = RTLSDR_CANCELING;
+ 				}
+ 			}
+-- 
+2.47.1
+
