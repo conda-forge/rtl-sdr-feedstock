@@ -1,5 +1,5 @@
 {% set name = "rtl-sdr" %}
-{% set version = "2.0.2" %}
+{% set version = "2.0.3" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/osmocom/{{ name }}/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: d69943eb32df742bc38a00ce6615e41250fd57851174e5ff916ec31e9e9e68e9
+  sha256: 23dec530f40456a8396e7c897f313859877e18b4c6432c6d323645871e351f6f
   patches:
     - 0001-add-libusb-lib-directories-in-cmake-for-macos.patch
     - 0002-open-with-file-descriptor.patch
@@ -18,7 +18,7 @@ source:
     - 0007-Wait-until-all-transfers-are-cancelled.patch
 
 build:
-  number: 3
+  number: 0
   run_exports:
     - {{ pin_subpackage('rtl-sdr', max_pin='x') }}
   # instructions for manually linking udev rules
