@@ -10,9 +10,27 @@ cmake_config_args=(
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_INSTALL_LIBDIR=lib
     -DCMAKE_INSTALL_PREFIX=$PREFIX
-    -DDETACH_KERNEL_DRIVER=ON
     -DINSTALL_UDEV_RULES=OFF
 )
+
+# librtlsdr's DETACH_KERNEL_DRIVER option exists for Linux, where the
+# dvb_usb_rtl28xxu kernel module may have claimed the device. On macOS libusb
+# implements detach as whole-device capture, which fails with
+# LIBUSB_ERROR_ACCESS unless the process is root or carries the
+# com.apple.vm.device-access entitlement (and re-enumerates the device when it
+# does succeed). rtlsdr_open() treats any failed detach as fatal (`goto err`),
+# so with this option enabled an unprivileged process cannot open a device
+# whenever libusb_kernel_driver_active() reports the interface as claimed.
+# With it off, the same condition is only an advisory and the open proceeds.
+if [[ $target_platform == linux-* ]] ; then
+    cmake_config_args+=(
+        -DDETACH_KERNEL_DRIVER=ON
+    )
+else
+    cmake_config_args+=(
+        -DDETACH_KERNEL_DRIVER=OFF
+    )
+fi
 
 if [[ $target_platform == linux-64 || $target_platform == linux-ppc64le ]] ; then
     cmake_config_args+=(
